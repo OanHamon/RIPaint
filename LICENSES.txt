@@ -1,0 +1,33 @@
+LICENCES ET PROVENANCE DES ASSETS
+=================================
+
+Tous les assets du projet sont générés par le code du projet lui-même :
+
+- Graphismes (cubes, objets, étoiles, couronne, arène, effets) : dessinés en ASCII dans
+  game/art.py et game/render.py. Création originale.
+- Police pixel 5x7 : dessinée dans engine8bit/font.py. Création originale (aucune police
+  tierce n'est utilisée ni incluse).
+- Bruitages : synthétisés par audio/synth.py et audio/sfx.py (ondes carrées, triangle,
+  dents de scie, bruit, enveloppes ADSR). Création originale.
+- Musique : générée par audio/music.py (séquenceur procédural). Création originale.
+
+Aucun son, musique, image ou police externe n'est utilisé.
+
+RÈGLE POUR L'AVENIR
+-------------------
+Si un son ou une image externe est ajouté un jour, il doit être sous licence CC0
+(domaine public), et sa source doit être notée ci-dessous :
+
+    Fichier : (aucun pour l'instant)
+    Source  :
+    Licence : CC0 1.0
+
+BIBLIOTHÈQUES UTILISÉES (non redistribuées dans les vidéos)
+----------------------------------------------------------
+- pygame (LGPL 2.1) : https://www.pygame.org
+- numpy (BSD 3-Clause) : https://numpy.org
+- imageio-ffmpeg (BSD 2-Clause), qui télécharge un binaire ffmpeg (LGPL/GPL), appelé
+  comme programme externe : https://github.com/imageio/imageio-ffmpeg
+- tkinter (inclus avec Python, licence PSF)
+
+Les vidéos produites ne contiennent que les créations ci-dessus.

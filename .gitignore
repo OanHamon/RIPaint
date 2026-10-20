@@ -1,0 +1,14 @@
+# Vidéos générées (restent en local)
+videos/
+*.tmp.mp4
+*.tmp.wav
+*.ffmpeg.log
+
+# Réglages personnels (recréés au premier lancement)
+config.json
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
