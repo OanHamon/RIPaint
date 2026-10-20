@@ -203,7 +203,8 @@ def magnet_icon() -> pygame.Surface:
 
 
 def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(0.0, 0.0),
-              stunned: bool = False, flash: bool = False, frozen: bool = False) -> None:
+              stunned: bool = False, flash: bool = False, frozen: bool = False,
+              hurt: bool = False) -> None:
     """Cube 8-bit : contour noir, corps clair, ombre foncée, reflet, yeux qui regardent
     dans la direction du mouvement (croix si assommé)."""
     dark, mid, light = palette.TEAMS[team]
@@ -235,6 +236,10 @@ def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(
             else:
                 pygame.draw.line(surf, K, (ex, top), (ex + e, top + e))
                 pygame.draw.line(surf, K, (ex + e, top), (ex, top + e))
+    elif hurt:
+        # yeux plissés (aïe !)
+        pygame.draw.rect(surf, K, (left - (1 if e > 1 else 0), top + e // 2, e + (1 if e > 1 else 0), 1))
+        pygame.draw.rect(surf, K, (right, top + e // 2, e + (1 if e > 1 else 0), 1))
     else:
         pygame.draw.rect(surf, K, (left, top, e, e + (1 if size >= 10 else 0)))
         pygame.draw.rect(surf, K, (right, top, e, e + (1 if size >= 10 else 0)))

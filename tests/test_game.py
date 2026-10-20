@@ -416,3 +416,28 @@ def test_boots_make_cube_faster():
     for _ in range(round(b.settings.boots_duration * FPS)):
         b.step()
     assert fast.boots == 0 and any(e.name == "boots_end" for e in b.events)
+
+
+@pytest.mark.parametrize("kind", ["gun", "brush", "bomb", "ice", "bucket"])
+def test_hit_by_opponent_item_triggers_hit_animation(kind):
+    s = only(kind, item_interval=1.5, max_items=4)
+    hits = set()
+
+    def check(b):
+        for c in b.cubes:
+            if c.hit_anim > 0:
+                hits.add(c.idx)
+                assert c.hit_anim <= 24
+
+    b = run(110, s, check=check)
+    assert hits, "aucune animation de coup déclenchée"
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    for c in b.cubes:
+        c.hit_anim = 20
+    r.draw(surf)
+
+
+def test_bullet_still_faster_than_fastest_cube():
+    s = Settings()
+    assert s.bullet_speed > s.cube_speed * s.speed_ramp * s.boots_factor * 0.9

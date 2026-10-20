@@ -20,6 +20,7 @@ class Cube:
     roller: int = 0          # images restantes de rouleau
     magnet: int = 0          # images restantes d'aimant
     boots: int = 0           # images restantes de bottes (vitesse augmentée)
+    hit_anim: int = 0        # images restantes de l'animation « touché » (purement visuelle)
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0
@@ -115,6 +116,7 @@ class Wave:
     origin: float            # point de départ le long de la bande
     half: float              # demi-épaisseur
     dist: float = 0.0        # distance parcourue de chaque côté
+    hit: set = field(default_factory=set)
 
 
 @dataclass

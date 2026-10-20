@@ -60,7 +60,7 @@ class ControlPanel:
         self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
         self.speed_ramp = tk.DoubleVar(value=self.s.speed_ramp)
         self._spin(box, 2, "Vitesse à la fin (x)", self.speed_ramp, 1.0, 3.0, 0.1)
-        ttk.Label(box, text="1.0 = vitesse constante ; 1.6 = 60 % plus rapide à la fin du chrono",
+        ttk.Label(box, text="1.0 = vitesse constante ; 1.8 = 80 % plus rapide à la fin du chrono",
                   foreground="#666").grid(row=3, column=0, columnspan=2, sticky="w")
 
         # --- Objets ---

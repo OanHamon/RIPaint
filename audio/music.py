@@ -37,7 +37,7 @@ def _place(buf: np.ndarray, sig: np.ndarray, start: int):
 
 def make_loop(seed: int) -> np.ndarray:
     rng = random.Random(seed * 7919 + 17)
-    bpm = rng.choice([128, 132, 136, 140, 144, 150])
+    bpm = rng.choice([140, 145, 150, 155, 160])
     key = 57 + rng.randint(-4, 4)  # tonique autour de A3
     prog = rng.choice(PROGRESSIONS)
     bars = 8

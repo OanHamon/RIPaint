@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots"]
@@ -56,7 +56,7 @@ class Settings:
 
     # Effets des objets
     aim_duration: float = 0.3
-    bullet_speed: float = 110.0       # px logiques / s
+    bullet_speed: float = 170.0       # px logiques / s
     stun_duration: float = 5.0
     brush_radius: int = 30
     slow_duration: float = 3.0
@@ -80,8 +80,8 @@ class Settings:
     outro_duration: float = 5.0
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
     cube_size: int = 13
-    speed_ramp: float = 1.6           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
-    cube_speed: float = 42.0          # px logiques / s
+    speed_ramp: float = 1.8           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
+    cube_speed: float = 54.0          # px logiques / s
 
     # Génération
     video_count: int = 1
@@ -154,6 +154,10 @@ def migrate(data: dict) -> dict:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 4:
         for key, old_default in (("cube_size", 11), ("brush_radius", 26)):
+            if data.get(key) == old_default:
+                data.pop(key)
+    if int(data.get("config_version", 1)) < 5:
+        for key, old_default in (("cube_speed", 42.0), ("speed_ramp", 1.6), ("bullet_speed", 110.0)):
             if data.get(key) == old_default:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:

@@ -25,6 +25,7 @@ BOMB_KNOCKBACK = 190.0
 WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
 RESIZE_FRAMES = 24
+HIT_ANIM = 24              # durée de l'animation « touché » (écrasement/étirement)
 
 
 def nearest_opponent(b: "Battle", cube: Cube) -> Cube | None:
@@ -143,6 +144,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
             if c.idx != cube.idx:
                 c.frozen = frames
                 c.kb_x = c.kb_y = 0.0
+                c.hit_anim = HIT_ANIM
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.SKY, 10)
         b.emit("freeze")
     elif item.kind == "magnet":
@@ -221,6 +223,7 @@ def update_bullets(b: "Battle") -> None:
                 b.splat(hit.cx, hit.cy, bullet.owner, 6 + hit.half)
                 hit.stun = round(b.settings.stun_duration * 60)
                 hit.kb_x = hit.kb_y = 0.0
+                hit.hit_anim = HIT_ANIM
                 b.emit("bullet_hit")
                 b.emit("stun", frame=b.frame + 6)
                 bullet.alive = False
@@ -260,6 +263,7 @@ def update_swipes(b: "Battle") -> None:
                     kx, ky = math.cos(sw.theta), math.sin(sw.theta)
                 c.kb_x, c.kb_y = kx * KNOCKBACK_SPEED, ky * KNOCKBACK_SPEED
                 c.slow = round(s.slow_duration * 60)
+                c.hit_anim = HIT_ANIM
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.TEAMS[owner.team][1], 8)
@@ -294,6 +298,7 @@ def update_bombs(b: "Battle") -> None:
                     a = b.rng.uniform(0, 2 * math.pi)
                     kx, ky = math.cos(a), math.sin(a)
                 c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
+                c.hit_anim = HIT_ANIM
         ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
         b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
         b.sparkle(ax, ay, palette.WHITE, 10)
@@ -315,6 +320,8 @@ def update_cube_timers(b: "Battle", cube: Cube) -> None:
             b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 8)
     if cube.magnet > 0:
         cube.magnet -= 1
+    if cube.hit_anim > 0:
+        cube.hit_anim -= 1
     if cube.boots > 0:
         cube.boots -= 1
         if cube.boots == 0:
@@ -372,5 +379,13 @@ def update_waves(b: "Battle") -> None:
                 physics.paint_rect(b.grid, lo_i, a0, hi_i, a1, w.owner)
             else:
                 physics.paint_rect(b.grid, a0, lo_i, a1, hi_i, w.owner)
+        for c in b.cubes:
+            if c.idx == w.owner or c.idx in w.hit:
+                continue
+            along, across = (c.cx, c.cy) if w.horizontal else (c.cy, c.cx)
+            if abs(across - w.band) <= w.half + c.half and abs(along - w.origin) <= d1 + c.half:
+                w.hit.add(c.idx)
+                c.hit_anim = HIT_ANIM
+                b.emit("splat", gain=0.6)
         if w.origin - d1 <= 0 and w.origin + d1 >= length:
             b.waves.remove(w)

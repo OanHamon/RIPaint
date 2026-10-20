@@ -42,7 +42,7 @@ python -m pip install -r requirements.txt
 |---|---|
 | Nombre de joueurs | « Aléatoire (2 à 4) » ou 2, 3, 4 cubes fixes. |
 | Taille des cubes | En pixels logiques (13 par défaut ; 5 à 16). Plus gros = plus de chocs et d'interactions. |
-| Vitesse à la fin (x) | Les cubes accélèrent progressivement du GO jusqu'à la fin du chrono (1.6 = 60 % plus vite à la fin ; 1.0 = vitesse constante). « SPEED UP! » est annoncé au tiers et aux deux tiers. |
+| Vitesse à la fin (x) | Les cubes accélèrent progressivement du GO jusqu'à la fin du chrono (1.8 = 80 % plus vite à la fin ; 1.0 = vitesse constante). « SPEED UP! » est annoncé au tiers et aux deux tiers. |
 | Probabilité des objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
 | Intervalle | Temps entre deux apparitions d'objets (5 s par défaut). |
 | Objets max en même temps / Sabliers max | Limites (3 / 3 par défaut). |
@@ -86,7 +86,7 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 |---|---|---|
 | `players` | 0 | Nombre de cubes : 0 = aléatoire (2 à 4), sinon 2, 3 ou 4 |
 | `cube_size` | 13 | Taille des cubes en pixels logiques (x2 avec la potion) |
-| `speed_ramp` | 1.6 | Multiplicateur de vitesse atteint à la fin du chrono de base |
+| `speed_ramp` | 1.8 | Multiplicateur de vitesse atteint à la fin du chrono de base |
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |
 | `safe_top` / `safe_bottom` / `safe_right` | 130 / 400 / 140 | Zones de sécurité TikTok en pixels de la vidéo finale |
 | `intro_duration` / `battle_duration` / `outro_duration` | 5 / 50 / 5 | Durées en secondes |
@@ -99,7 +99,7 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 | `ice_duration` | 2 | Durée du gel |
 | `magnet_duration` / `magnet_speed` | 4 / 70 | Durée de l'aimant et vitesse d'attraction des objets |
 | `boots_duration` / `boots_factor` | 5 / 1.8 | Durée des bottes et multiplicateur de vitesse |
-| `cube_speed` / `bullet_speed` | 42 / 110 | Vitesses en pixels logiques par seconde |
+| `cube_speed` / `bullet_speed` | 54 / 170 | Vitesses en pixels logiques par seconde |
 | `brush_radius` | 30 | Rayon du coup de gros pinceau |
 | `paint_sound` | false | Léger souffle continu pendant la peinture |
 | `music_enabled` | true | Musique de fond |

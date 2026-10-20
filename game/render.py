@@ -10,7 +10,7 @@ from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W
 
 from . import art
 from .battle import Battle, fmt_pct
-from .items import SPAWN_ANIM
+from .items import HIT_ANIM, SPAWN_ANIM
 from .layout import WALL
 
 
@@ -252,8 +252,7 @@ class Renderer:
                     color = palette.TEAMS[c.team][1] if k else palette.TEAMS[c.team][2]
                     if (b.frame + k) % 2 == 0:
                         pygame.draw.rect(surf, color, (gx, gy, c.size, c.size), 1)
-            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash,
-                          frozen=c.frozen > 0)
+            self._draw_cube(surf, c, x, y, look, flash)
             if c.big and (b.frame // 6) % 2 == 0:
                 pygame.draw.rect(surf, palette.MAGENTA, (x - 1, y - 1, c.size + 2, c.size + 2), 1)
             top_y = y - 1
@@ -280,6 +279,27 @@ class Renderer:
             if leader == c.idx:
                 cr = art.crown()
                 surf.blit(cr, (x + c.size // 2 - 2, top_y - 3))
+
+    def _draw_cube(self, surf, c, x, y, look, flash):
+        """Dessine un cube ; s'il vient d'être touché par l'objet d'un autre cube :
+        écrasement/étirement élastique, flash blanc, yeux plissés et anneau d'impact."""
+        if c.hit_anim <= 0:
+            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash,
+                          frozen=c.frozen > 0)
+            return
+        t = HIT_ANIM - c.hit_anim
+        amp = 0.4 * (1 - t / HIT_ANIM) * math.cos(t * 0.75)
+        w = max(3, round(c.size * (1 + amp)))
+        h = max(3, round(c.size * (1 - amp)))
+        tmp = pygame.Surface((c.size + 2, c.size + 2), pygame.SRCALPHA)
+        art.draw_cube(tmp, 1, 1, c.size, c.team, look, stunned=c.stun > 0, flash=flash or t < 4,
+                      frozen=c.frozen > 0, hurt=True)
+        scaled = pygame.transform.scale(tmp, (w + 2, h + 2))
+        cx, cy = x + c.size / 2, y + c.size / 2
+        surf.blit(scaled, (round(cx - (w + 2) / 2), round(cy - (h + 2) / 2)))
+        if t < 9 and t % 3 != 2:
+            r = int(c.half) + 2 + t
+            pygame.draw.rect(surf, palette.WHITE, (round(cx) - r, round(cy) - r, 2 * r, 2 * r), 1)
 
     def _particles(self, surf, layer):
         for p in self.b.particles:

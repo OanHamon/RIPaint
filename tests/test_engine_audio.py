@@ -117,4 +117,14 @@ def test_previous_defaults_upgrade_to_13px_cubes(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"cube_size": 11, "brush_radius": 26, "config_version": 3}), encoding="utf-8")
     s = cfg.load(p)
-    assert s.cube_size == 13 and s.brush_radius == 30 and s.speed_ramp == 1.6
+    assert s.cube_size == 13 and s.brush_radius == 30 and s.speed_ramp == 1.8
+
+
+def test_previous_speeds_upgrade_to_faster_defaults(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"cube_speed": 42.0, "speed_ramp": 1.6, "bullet_speed": 110.0,
+                             "config_version": 4}), encoding="utf-8")
+    s = cfg.load(p)
+    assert (s.cube_speed, s.speed_ramp, s.bullet_speed) == (54.0, 1.8, 170.0)
+    p.write_text(json.dumps({"speed_ramp": 1.3, "config_version": 4}), encoding="utf-8")
+    assert cfg.load(p).speed_ramp == 1.3          # valeur choisie dans le panneau : gardée
