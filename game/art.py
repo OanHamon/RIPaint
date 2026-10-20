@@ -148,6 +148,18 @@ MAGNET = (
     ".........",
 )
 
+BOOTS = (
+    "..KKKK...",
+    "W.KRRK...",
+    "WWKRRK...",
+    ".WKRRK...",
+    "..KRRRKK.",
+    "..KRRRRRK",
+    "..KRRRRRK",
+    "..KGGGGGK",
+    "..KKKKKKK",
+)
+
 MINI_ROLLER = (
     "KKKKK",
     "KWWWK",
@@ -162,7 +174,8 @@ MINI_MAGNET = (
 )
 
 ITEM_SPRITES = {"gun": GUN, "brush": BRUSH, "potion": POTION, "hourglass": HOURGLASS, "bomb": BOMB,
-                "roller": ROLLER, "bucket": BUCKET, "ice": ICE, "magnet": MAGNET}
+                "roller": ROLLER, "bucket": BUCKET, "ice": ICE, "magnet": MAGNET,
+                "boots": BOOTS}
 
 
 def item_sprite(kind: str) -> pygame.Surface:
@@ -211,7 +224,7 @@ def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(
     cy = y + size // 2 - e // 2 - (1 if size >= 10 else 0)
     ox = int(round(look[0] * max(1, e // 2)))
     oy = int(round(look[1] * max(1, e // 2)))
-    gap = max(1, size // 7)
+    gap = max(1, size // 6)
     left = cx - gap - e + 1 + ox
     right = cx + gap - (0 if size % 2 else 1) + ox
     top = cy - e // 2 + oy

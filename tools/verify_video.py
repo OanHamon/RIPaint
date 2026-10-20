@@ -81,6 +81,7 @@ def expected_frames(meta: dict) -> tuple[int, int]:
     data = dict(meta["settings"])
     for kind in ITEM_KINDS:   # vidéo d'une version antérieure : objets inexistants à l'époque
         data.setdefault(f"prob_{kind}", 0)
+    data.setdefault("speed_ramp", 1.0)     # pas d'accélération progressive avant cette option
     b = Battle(int(meta["seed"]), Settings.from_dict(data))
     while not b.done:
         b.step()
@@ -168,6 +169,13 @@ def main(argv=None) -> int:
         paths += glob.glob(a) or [a]
     if not paths:
         paths = sorted(glob.glob(str(ROOT / "videos" / "*.mp4")))
+    missing = [p for p in paths if not Path(p).is_file()]
+    for p in missing:
+        print(f"Fichier introuvable : {p}")
+    paths = [p for p in paths if Path(p).is_file()]
+    if not paths:
+        print("Aucune vidéo à vérifier.")
+        return 1
     all_ok = True
     seeds = []
     for p in paths:

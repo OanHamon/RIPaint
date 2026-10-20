@@ -341,7 +341,7 @@ def test_magnet_attracts_items():
     assert math.hypot(far.x - cube.cx, far.y - cube.cy) < start - 25
 
 
-@pytest.mark.parametrize("kind", ["bomb", "roller", "bucket", "ice", "magnet"])
+@pytest.mark.parametrize("kind", ["bomb", "roller", "bucket", "ice", "magnet", "boots"])
 def test_full_game_with_each_new_item(kind):
     s = only(kind, item_interval=2.0, max_items=4)
     b = run(80, s)
@@ -357,3 +357,62 @@ def test_in_game_texts_are_english():
     for french in ("GAGNE", "ÉGALITÉ", "FUSIL", "ROUGE", "BLEU", "JAUNE", "VERT", " !"):
         assert french not in texts
     assert "WINS!" in texts or "TIE!" in texts
+
+
+def test_speed_ramps_up_until_end_of_base_timer():
+    b = Battle(100, Settings(speed_ramp=1.6))
+    while b.frame < b.battle_start:
+        b.step()
+    assert abs(b.speed_multiplier() - 1.0) < 1e-9
+    base = round(b.settings.battle_duration * FPS)
+    b.frame = b.battle_start + base // 2
+    assert abs(b.speed_multiplier() - 1.3) < 0.01
+    b.frame = b.battle_start + base + 300          # temps bonus des sabliers : vitesse max
+    assert abs(b.speed_multiplier() - 1.6) < 1e-9
+    assert abs(Battle(100, Settings(speed_ramp=1.0)).speed_multiplier() - 1.0) < 1e-9
+
+
+def test_speed_up_announced_twice():
+    b = run(101, Settings(speed_ramp=1.6))
+    assert sum(e.name == "speed_up" for e in b.events) == 2
+    assert sum(t == "SPEED UP!" for _, _, t in b.subtitles) == 2
+
+
+def test_cubes_really_go_faster_at_the_end():
+    b = Battle(102, only("gun", item_interval=999, speed_ramp=2.0))
+    def travelled(frames):
+        dist = 0.0
+        for _ in range(frames):
+            before = [(c.cx, c.cy) for c in b.cubes]
+            b.step()
+            dist += sum(math.hypot(c.cx - x, c.cy - y) for c, (x, y) in zip(b.cubes, before))
+        return dist
+    while b.frame < b.battle_start + 10:
+        b.step()
+    early = travelled(60)
+    while b.frame < b.battle_end - 70:
+        b.step()
+    late = travelled(60)
+    assert late > 1.7 * early
+
+
+def test_boots_make_cube_faster():
+    from game import items
+    from game.entities import Item
+    b = Battle(103, only("boots", item_interval=999, speed_ramp=1.0))
+    while b.frame < b.battle_start + 5:
+        b.step()
+    fast, normal = b.cubes[0], b.cubes[1]
+    items.pickup(b, fast, Item("boots", fast.cx, fast.cy, 0))
+    assert fast.boots > 0 and any(e.name == "pickup_boots" for e in b.events)
+    start = {c.idx: (c.cx, c.cy) for c in b.cubes}
+    path = {c.idx: 0.0 for c in b.cubes}
+    for _ in range(30):
+        before = {c.idx: (c.cx, c.cy) for c in b.cubes}
+        b.step()
+        for c in b.cubes:
+            path[c.idx] += math.hypot(c.cx - before[c.idx][0], c.cy - before[c.idx][1])
+    assert path[fast.idx] > 1.5 * path[normal.idx]
+    for _ in range(round(b.settings.boots_duration * FPS)):
+        b.step()
+    assert fast.boots == 0 and any(e.name == "boots_end" for e in b.events)

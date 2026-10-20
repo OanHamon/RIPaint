@@ -97,8 +97,8 @@ def test_old_config_migrates_to_bigger_cubes(tmp_path):
     p = tmp_path / "c.json"
     p.write_text(json.dumps({"cube_size": 7, "brush_radius": 20, "max_items": 4}), encoding="utf-8")
     s = cfg.load(p)
-    assert s.cube_size == cfg.Settings().cube_size == 11
-    assert s.brush_radius == 26 and s.max_items == 4
+    assert s.cube_size == cfg.Settings().cube_size == 13
+    assert s.brush_radius == 30 and s.max_items == 4
     p.write_text(json.dumps({"cube_size": 9}), encoding="utf-8")   # valeur choisie par l'utilisateur : gardée
     assert cfg.load(p).cube_size == 9
     p.write_text(json.dumps({"cube_size": 7, "config_version": 2}), encoding="utf-8")
@@ -111,3 +111,10 @@ def test_french_default_hooks_migrate_to_english(tmp_path):
     assert cfg.load(p).hooks == cfg.DEFAULT_HOOKS
     p.write_text(json.dumps({"hooks": ["MES PROPRES PHRASES !"], "config_version": 2}), encoding="utf-8")
     assert cfg.load(p).hooks == ["MES PROPRES PHRASES !"]     # phrases personnalisées : gardées
+
+
+def test_previous_defaults_upgrade_to_13px_cubes(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"cube_size": 11, "brush_radius": 26, "config_version": 3}), encoding="utf-8")
+    s = cfg.load(p)
+    assert s.cube_size == 13 and s.brush_radius == 30 and s.speed_ramp == 1.6

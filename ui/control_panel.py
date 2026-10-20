@@ -58,6 +58,10 @@ class ControlPanel:
         combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
         self.cube_size = tk.IntVar(value=self.s.cube_size)
         self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
+        self.speed_ramp = tk.DoubleVar(value=self.s.speed_ramp)
+        self._spin(box, 2, "Vitesse à la fin (x)", self.speed_ramp, 1.0, 3.0, 0.1)
+        ttk.Label(box, text="1.0 = vitesse constante ; 1.6 = 60 % plus rapide à la fin du chrono",
+                  foreground="#666").grid(row=3, column=0, columnspan=2, sticky="w")
 
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
@@ -135,7 +139,8 @@ class ControlPanel:
         ttk.Button(bar2, text="Ouvrir le dossier des vidéos", command=self.open_folder).pack(side="left")
         ttk.Button(bar2, text="Réglages avancés…", command=self.open_config).pack(side="left", padx=6)
 
-        for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size):
+        for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size,
+                    self.speed_ramp):
             var.trace_add("write", lambda *_: self.on_change())
         self.on_change(save=False)
 
@@ -166,6 +171,7 @@ class ControlPanel:
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
+        s.speed_ramp = round(min(3.0, max(1.0, float(self._get(self.speed_ramp, s.speed_ramp)))), 2)
         for kind, var in self.prob_vars.items():
             setattr(s, f"prob_{kind}", float(round(self._get(var, 0))))
         s.item_interval = max(0.5, float(self._get(self.interval, s.item_interval)))

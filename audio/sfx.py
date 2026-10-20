@@ -65,6 +65,9 @@ _meta("wave", 8, 0.75)
 _meta("freeze", 8, 0.7)
 _meta("thaw", 5, 0.5)
 _meta("magnet", 7, 0.55)
+_meta("pickup_boots", 7, 0.7, "pickup")
+_meta("boots_end", 5, 0.45)
+_meta("speed_up", 9, 0.7)
 
 
 def _noise(dur, rate, vol, a=0.001, d=0.05, s=0.3, r=0.05, seed=1, rate_end=None):
@@ -222,6 +225,16 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
     bank["thaw"] = overlay(
         (_noise(0.08, 9000, 0.6, d=0.03, s=0.2, r=0.04, seed=15), 0),
         (tone("square", 800, 0.1, f_end=1600, duty=0.25, vol=0.35), 0.02),
+    )
+    bank["pickup_boots"] = overlay(
+        (_jingle(["C5", "E5", "G5", "C6", "E6", "G6", "C7"], 0.025, duty=0.25, vol=0.42), 0),
+        (_noise(0.2, 6000, 0.25, d=0.05, s=0.4, r=0.1, seed=16, rate_end=14000), 0.05),
+    )
+    bank["boots_end"] = tone("square", 900, 0.15, f_end=350, duty=0.25, vol=0.35)
+    bank["speed_up"] = overlay(
+        (concat(*[tone("square", note(x), 0.06, duty=0.5, vol=0.4, a=0.002, r=0.01)
+                  for x in ("A5", "A5", "E6")], tone("square", note("A6"), 0.25, duty=0.5, vol=0.4, r=0.12)), 0),
+        (tone("triangle", note("A3"), 0.43, vol=0.6, r=0.12), 0),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 

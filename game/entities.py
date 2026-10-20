@@ -19,6 +19,7 @@ class Cube:
     frozen: int = 0          # images restantes de gel (objet Glace)
     roller: int = 0          # images restantes de rouleau
     magnet: int = 0          # images restantes d'aimant
+    boots: int = 0           # images restantes de bottes (vitesse augmentée)
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0

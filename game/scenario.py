@@ -53,11 +53,19 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int) -> 
     min_dist = size * 3.5
     cubes: list[CubeStart] = []
     for team in teams:
-        for _ in range(500):
-            x = rng.uniform(margin, arena_w - margin)
-            y = rng.uniform(margin, arena_h - margin)
-            if all(math.hypot(x - c.x, y - c.y) >= min_dist for c in cubes):
-                break
+        # si la place manque, on réduit progressivement l'écart minimal (jamais de chevauchement)
+        dist = min_dist
+        while True:
+            for _ in range(500):
+                x = rng.uniform(margin, arena_w - margin)
+                y = rng.uniform(margin, arena_h - margin)
+                if all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes):
+                    break
+            else:
+                dist *= 0.85
+                if dist >= size * 1.6:
+                    continue
+            break
         dx, dy = random_direction(rng)
         cubes.append(CubeStart(team, x, y, dx, dy))
     hooks = [h for h in settings.hooks if h.strip()] or ["PICK YOUR COLOR!"]

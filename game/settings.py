@@ -7,13 +7,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 3
+CONFIG_VERSION = 4
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
-ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet"]
+ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots"]
 ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hourglass": "Sablier",
                "bomb": "Bombe", "roller": "Rouleau", "bucket": "Seau arc-en-ciel", "ice": "Glace",
-               "magnet": "Aimant"}
+               "magnet": "Aimant", "boots": "Bottes"}
 
 # Phrases d'accroche affichées dans la vidéo (en anglais)
 DEFAULT_HOOKS = [
@@ -48,6 +48,7 @@ class Settings:
     prob_bucket: float = 20
     prob_ice: float = 20
     prob_magnet: float = 20
+    prob_boots: float = 20
     item_interval: float = 5.0        # secondes entre deux apparitions
     max_items: int = 3                # objets présents simultanément
     max_hourglasses: int = 3          # sabliers par partie
@@ -57,7 +58,7 @@ class Settings:
     aim_duration: float = 0.3
     bullet_speed: float = 110.0       # px logiques / s
     stun_duration: float = 5.0
-    brush_radius: int = 26
+    brush_radius: int = 30
     slow_duration: float = 3.0
     slow_factor: float = 0.45
     potion_duration: float = 5.0
@@ -70,13 +71,16 @@ class Settings:
     ice_duration: float = 2.0
     magnet_duration: float = 4.0
     magnet_speed: float = 70.0        # px logiques / s
+    boots_duration: float = 5.0
+    boots_factor: float = 1.8         # multiplicateur de vitesse des bottes
 
     # Partie
     intro_duration: float = 5.0
     battle_duration: float = 50.0
     outro_duration: float = 5.0
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
-    cube_size: int = 11
+    cube_size: int = 13
+    speed_ramp: float = 1.6           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
     cube_speed: float = 42.0          # px logiques / s
 
     # Génération
@@ -146,6 +150,10 @@ def migrate(data: dict) -> dict:
     data = dict(data)
     if int(data.get("config_version", 1)) < 2:
         for key, old_default in (("cube_size", 7), ("brush_radius", 20)):
+            if data.get(key) == old_default:
+                data.pop(key)
+    if int(data.get("config_version", 1)) < 4:
+        for key, old_default in (("cube_size", 11), ("brush_radius", 26)):
             if data.get(key) == old_default:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:

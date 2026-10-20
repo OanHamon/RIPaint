@@ -116,6 +116,13 @@ class Battle:
         total = self.W * self.H
         return [float(c) / total * 100 for c in self.counts]
 
+    def speed_multiplier(self) -> float:
+        """Accélération progressive : x1 au GO, x speed_ramp à la fin du chrono de base
+        (le temps ajouté par les sabliers reste à la vitesse maximale)."""
+        base = max(1, round(self.settings.battle_duration * FPS))
+        t = min(1.0, max(0.0, (self.frame - self.battle_start) / base))
+        return 1.0 + (self.settings.speed_ramp - 1.0) * t
+
     def emit(self, name: str, gain: float = 1.0, frame: int | None = None) -> None:
         self.events.append(SoundEvent(self.frame if frame is None else frame, name, gain))
 
@@ -203,8 +210,15 @@ class Battle:
             item_logic.update_resize(self, c)
             item_logic.update_cube_timers(self, c)
 
+        ramp = self.speed_multiplier()
+        base = round(s.battle_duration * FPS)
+        if s.speed_ramp > 1.05 and f - self.battle_start in (base // 3, 2 * base // 3):
+            self.popup("SPEED UP!", palette.WHITE, duration=72)
+            self.emit("speed_up")
         for c in self.cubes:
-            speed = s.cube_speed * (s.slow_factor if c.slow > 0 else 1.0)
+            speed = s.cube_speed * ramp * (s.slow_factor if c.slow > 0 else 1.0)
+            if c.boots > 0:
+                speed *= s.boots_factor
             if physics.move(c, speed, self.W, self.H):
                 physics.jitter(c, self.rng)
                 self.emit(f"bounce{self.fx.randrange(BOUNCE_VARIANTS)}")

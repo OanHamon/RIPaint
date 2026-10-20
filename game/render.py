@@ -245,6 +245,13 @@ class Renderer:
             moving = b.phase == "battle" and c.active
             look = (c.dx, c.dy) if moving else (0.0, 0.0)
             flash = c.stun > 0 and c.stun > round(b.settings.stun_duration * FPS) - 8
+            if c.boots > 0 and moving:
+                # traînée de « fantômes » derrière un cube chaussé de bottes
+                for k, gap in enumerate((c.size * 0.9, c.size * 0.45)):
+                    gx, gy = int(x - c.dx * gap), int(y - c.dy * gap)
+                    color = palette.TEAMS[c.team][1] if k else palette.TEAMS[c.team][2]
+                    if (b.frame + k) % 2 == 0:
+                        pygame.draw.rect(surf, color, (gx, gy, c.size, c.size), 1)
             art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash,
                           frozen=c.frozen > 0)
             if c.big and (b.frame // 6) % 2 == 0:

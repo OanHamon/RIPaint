@@ -19,7 +19,8 @@ SPAWN_ANIM = 36            # images de clignotement avant de pouvoir être ramas
 WALL_MARGIN = 9            # distance minimale au mur (centre de l'objet)
 # Textes affichés dans la vidéo (en anglais)
 ITEM_NAMES = {"gun": "GUN", "brush": "BRUSH", "potion": "POTION", "hourglass": "TIMER",
-              "bomb": "BOMB", "roller": "ROLLER", "bucket": "RAINBOW", "ice": "ICE", "magnet": "MAGNET"}
+              "bomb": "BOMB", "roller": "ROLLER", "bucket": "RAINBOW", "ice": "ICE", "magnet": "MAGNET",
+              "boots": "BOOTS"}
 BOMB_KNOCKBACK = 190.0
 WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
@@ -147,6 +148,8 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     elif item.kind == "magnet":
         cube.magnet = round(s.magnet_duration * 60)
         b.emit("magnet")
+    elif item.kind == "boots":
+        cube.boots = round(s.boots_duration * 60)
 
 
 def start_resize(cube: Cube, new_size: int) -> None:
@@ -312,6 +315,10 @@ def update_cube_timers(b: "Battle", cube: Cube) -> None:
             b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 8)
     if cube.magnet > 0:
         cube.magnet -= 1
+    if cube.boots > 0:
+        cube.boots -= 1
+        if cube.boots == 0:
+            b.emit("boots_end")
 
 
 def paint_size(b: "Battle", cube: Cube) -> float:
