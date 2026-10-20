@@ -80,6 +80,7 @@ class Settings:
     outro_duration: float = 5.0
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
     cube_size: int = 13
+    obstacles: int = 3                # petits blocs fixes dans l'arène (0 = aucun)
     speed_ramp: float = 1.8           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
     cube_speed: float = 54.0          # px logiques / s
 

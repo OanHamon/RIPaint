@@ -19,6 +19,7 @@ from . import items as item_logic
 from . import physics
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
+from .obstacles import make_obstacles
 from .scenario import make_scenario, random_direction
 from .settings import Settings
 
@@ -49,7 +50,9 @@ class Battle:
         self.settings = settings
         self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right)
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
-        self.scenario = make_scenario(seed, settings, self.W, self.H)
+        # obstacles d'abord (générateur à part), puis les cubes qui les évitent
+        self.obstacles = make_obstacles(seed, settings.obstacles, settings.cube_size, self.W, self.H)
+        self.scenario = make_scenario(seed, settings, self.W, self.H, self.obstacles)
         self.rng = self.scenario.rng
         self.fx = random.Random(seed * 31 + 7)        # aléatoire purement visuel
         self.hook = self.scenario.hook
@@ -58,6 +61,9 @@ class Battle:
                       for i, c in enumerate(self.scenario.cubes)]
         for c in self.cubes:
             c.last_pos = (c.cx, c.cy)
+        for x0, y0, x1, y1 in self.obstacles:
+            self.grid[y0:y1, x0:x1] = physics.OBSTACLE
+        self.paintable = int((self.grid != physics.OBSTACLE).sum())   # cases qui comptent pour le score
         self.items = []
         self.aims = []
         self.bullets = []
@@ -74,6 +80,7 @@ class Battle:
         self.hourglasses_spawned = 0
         self.hourglasses_taken = 0
         self.pair_cooldown: dict[tuple[int, int], int] = {}
+        self.bounce_sound_at: dict[int, int] = {}      # dernier son de rebond par cube
         self.next_tick: int | None = None
         self.tick_parity = 0
         self.result: Result | None = None
@@ -113,8 +120,7 @@ class Battle:
         return max(0.0, (self.battle_end - self.frame) / FPS)
 
     def percentages(self) -> list[float]:
-        total = self.W * self.H
-        return [float(c) / total * 100 for c in self.counts]
+        return [float(c) / self.paintable * 100 for c in self.counts]
 
     def speed_multiplier(self) -> float:
         """Accélération progressive : x1 au GO, x speed_ramp à la fin du chrono de base
@@ -219,11 +225,14 @@ class Battle:
             speed = s.cube_speed * ramp * (s.slow_factor if c.slow > 0 else 1.0)
             if c.boots > 0:
                 speed *= s.boots_factor
-            if physics.move(c, speed, self.W, self.H):
+            if physics.move(c, speed, self.W, self.H, self.obstacles):
                 physics.jitter(c, self.rng)
-                self.emit(f"bounce{self.fx.randrange(BOUNCE_VARIANTS)}")
+                # pas plus d'un « bip » toutes les 8 images par cube (zigzag dans un couloir étroit)
+                if f - self.bounce_sound_at.get(c.idx, -999) >= 8:
+                    self.bounce_sound_at[c.idx] = f
+                    self.emit(f"bounce{self.fx.randrange(BOUNCE_VARIANTS)}")
 
-        for pair in physics.resolve_collisions(self.cubes, self.W, self.H):
+        for pair in physics.resolve_collisions(self.cubes, self.W, self.H, obstacles=self.obstacles):
             if f - self.pair_cooldown.get(pair, -999) > 12:
                 self.emit("cube_hit")
                 a, b = self.cubes[pair[0]], self.cubes[pair[1]]
@@ -282,7 +291,7 @@ class Battle:
         self.bombs.clear()
         self.waves.clear()
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
-        self.result = compute_result(self.cubes, self.counts, self.W * self.H)
+        self.result = compute_result(self.cubes, self.counts, self.paintable)
         r = self.result
         if r.winner is not None:
             self.emit("victory", frame=f + 54)

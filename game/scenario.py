@@ -38,7 +38,7 @@ def random_direction(rng: random.Random) -> tuple[float, float]:
     return math.cos(a), math.sin(a)
 
 
-def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int) -> Scenario:
+def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obstacles=()) -> Scenario:
     rng = random.Random(seed)
     n = rng.randint(2, 4)            # toujours tiré, pour que la seed garde le même sens
     if settings.players in (2, 3, 4):
@@ -59,7 +59,8 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int) -> 
             for _ in range(500):
                 x = rng.uniform(margin, arena_w - margin)
                 y = rng.uniform(margin, arena_h - margin)
-                if all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes):
+                if all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes) and not any(
+                        x0 - size < x < x1 + size and y0 - size < y < y1 + size for x0, y0, x1, y1 in obstacles):
                     break
             else:
                 dist *= 0.85

@@ -56,8 +56,11 @@ def count_frames(path: Path) -> int:
 
 
 def decode_audio(path: Path) -> np.ndarray:
-    raw = _ff(["-i", str(path), "-map", "0:a:0", "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"], binary=True)
-    return np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768
+    """Audio décodé en flottant (les dépassements au-delà de 0 dBFS restent visibles) ; on garde,
+    pour chaque instant, le canal le plus fort (pas de conversion mono, qui change le niveau)."""
+    raw = _ff(["-i", str(path), "-map", "0:a:0", "-ar", str(SR), "-f", "f32le", "-"], binary=True)
+    data = np.frombuffer(raw, dtype=np.float32).reshape(-1, 2)
+    return data[np.arange(len(data)), np.abs(data).argmax(axis=1)]
 
 
 def decode_small(path: Path, seconds: float, start: float = 0.0) -> np.ndarray:
@@ -82,6 +85,7 @@ def expected_frames(meta: dict) -> tuple[int, int]:
     for kind in ITEM_KINDS:   # vidéo d'une version antérieure : objets inexistants à l'époque
         data.setdefault(f"prob_{kind}", 0)
     data.setdefault("speed_ramp", 1.0)     # pas d'accélération progressive avant cette option
+    data.setdefault("obstacles", 0)        # pas d'obstacles avant cette option
     b = Battle(int(meta["seed"]), Settings.from_dict(data))
     while not b.done:
         b.step()

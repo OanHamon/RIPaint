@@ -11,6 +11,7 @@ DT = 1 / 60
 KB_DECAY = 0.88                 # amortissement par image de la vitesse de recul
 MIN_COMPONENT = math.sin(math.radians(20))
 BOUNCE_JITTER = math.radians(6)
+OBSTACLE = -2                   # valeur des cases d'obstacle dans la grille (jamais peintes)
 
 
 def keep_diagonal(dx: float, dy: float) -> tuple[float, float]:
@@ -65,7 +66,52 @@ def clamp(cube: Cube, w: int, h: int) -> tuple[bool, bool]:
     return hx, hy
 
 
-def move(cube: Cube, speed: float, w: int, h: int) -> bool:
+def _overlaps(cx: float, cy: float, half: float, o) -> bool:
+    return (min(cx + half, o[2]) - max(cx - half, o[0]) > 1e-6
+            and min(cy + half, o[3]) - max(cy - half, o[1]) > 1e-6)
+
+
+def push_out_obstacles(cube: Cube, obstacles, w: float | None = None, h: float | None = None) -> bool:
+    """Sort le cube des obstacles qu'il chevauche par le plus court chemin LIBRE (qui ne le met
+    ni dans un autre obstacle ni hors de l'arène), puis le fait rebondir. Un cube trop gros pour
+    un couloir (potion) glisse donc hors du couloir au lieu de rester coincé.
+    Renvoie True si sa direction a été inversée."""
+    bounced = False
+    half = cube.half
+    for _ in range(4):
+        hit = next((o for o in obstacles if _overlaps(cube.cx, cube.cy, half, o)), None)
+        if hit is None:
+            break
+        x0, y0, x1, y1 = hit
+        moves = [(x0 - half - cube.cx, 0.0), (x1 + half - cube.cx, 0.0),
+                 (0.0, y0 - half - cube.cy), (0.0, y1 + half - cube.cy)]
+        moves.sort(key=lambda m: abs(m[0]) + abs(m[1]))
+
+        def free(m):
+            nx, ny = cube.cx + m[0], cube.cy + m[1]
+            if w is not None and not (half - 1e-6 <= nx <= w - half + 1e-6 and half - 1e-6 <= ny <= h - half + 1e-6):
+                return False
+            return not any(_overlaps(nx, ny, half, o) for o in obstacles)
+
+        mx, my = next((m for m in moves if free(m)), moves[0])
+        cube.cx += mx
+        cube.cy += my
+        if mx:
+            s = 1.0 if mx > 0 else -1.0
+            cube.kb_x = s * abs(cube.kb_x) * 0.5
+            if cube.dx * s < 0:
+                cube.dx = -cube.dx
+                bounced = True
+        if my:
+            s = 1.0 if my > 0 else -1.0
+            cube.kb_y = s * abs(cube.kb_y) * 0.5
+            if cube.dy * s < 0:
+                cube.dy = -cube.dy
+                bounced = True
+    return bounced
+
+
+def move(cube: Cube, speed: float, w: int, h: int, obstacles=()) -> bool:
     """Avance d'une image. Renvoie True si le cube a rebondi sur un mur."""
     v = 0.0 if cube.immobile else speed
     cube.cx += cube.dx * v * DT + cube.kb_x * DT
@@ -77,10 +123,14 @@ def move(cube: Cube, speed: float, w: int, h: int) -> bool:
     if abs(cube.kb_y) < 0.5:
         cube.kb_y = 0.0
     hx, hy = clamp(cube, w, h)
-    return (hx or hy) and not cube.immobile
+    ho = push_out_obstacles(cube, obstacles, w, h)
+    if ho:
+        clamp(cube, w, h)
+    return (hx or hy or ho) and not cube.immobile
 
 
-def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4) -> list[tuple[int, int]]:
+def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4,
+                       obstacles=()) -> list[tuple[int, int]]:
     """Sépare les cubes qui se chevauchent le long de l'axe de moindre pénétration et
     renvoie les directions vers l'extérieur (vitesse constante). Un cube assommé ou gelé est immobile."""
     collided: list[tuple[int, int]] = []
@@ -119,6 +169,8 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4) -
                     collided.append((i, j))
         for c in cubes:
             clamp(c, w, h)
+            if obstacles and push_out_obstacles(c, obstacles, w, h):
+                clamp(c, w, h)
         if not any_overlap:
             break
     return collided
@@ -131,7 +183,8 @@ def paint_rect(grid: np.ndarray, x0: int, y0: int, x1: int, y1: int, idx: int) -
     x0, y0 = max(0, x0), max(0, y0)
     x1, y1 = min(w, x1), min(h, y1)
     if x1 > x0 and y1 > y0:
-        grid[y0:y1, x0:x1] = idx
+        sub = grid[y0:y1, x0:x1]
+        sub[sub != OBSTACLE] = idx
 
 
 def disc_mask(grid_shape, cx: float, cy: float, r: float):
@@ -150,7 +203,8 @@ def paint_disc(grid: np.ndarray, cx: float, cy: float, r: float, idx: int) -> No
     if res is None:
         return
     sl, mask = res
-    grid[sl][mask] = idx
+    view = grid[sl]
+    view[mask & (view != OBSTACLE)] = idx
 
 
 def paint_sector(grid: np.ndarray, cx: float, cy: float, r: float, theta: float,
@@ -164,4 +218,5 @@ def paint_sector(grid: np.ndarray, cx: float, cy: float, r: float, theta: float,
     ang = np.arctan2(yy + 0.5 - cy, xx + 0.5 - cx) - theta
     ang = (ang + np.pi) % (2 * np.pi) - np.pi
     mask &= (ang >= a_from) & (ang <= a_to)
-    grid[sl][mask] = idx
+    view = grid[sl]
+    view[mask & (view != OBSTACLE)] = idx

@@ -59,6 +59,9 @@ def try_spawn(b: "Battle") -> None:
                 clear = False
                 break
         if clear:
+            clear = not any(ix0 < o[2] + 3 and ix1 > o[0] - 3 and iy0 < o[3] + 3 and iy1 > o[1] - 3
+                            for o in b.obstacles)
+        if clear:
             for other in b.items:
                 ox0, oy0, ox1, oy1 = other.rect()
                 if ix0 < ox1 + 3 and ix1 > ox0 - 3 and iy0 < oy1 + 3 and iy1 > oy0 - 3:
@@ -211,6 +214,13 @@ def update_bullets(b: "Battle") -> None:
                 bullet.alive = False
                 break
             ix, iy = int(bullet.x), int(bullet.y)
+            if b.grid[iy, ix] == physics.OBSTACLE:
+                # la balle s'écrase contre un obstacle
+                bx, by = bullet.x - bullet.dx * step, bullet.y - bullet.dy * step
+                b.splat(bx, by, bullet.owner, 6)
+                b.emit("splat")
+                bullet.alive = False
+                break
             physics.paint_rect(b.grid, ix - 1, iy - 1, ix + 1, iy + 1, bullet.owner)
             hit = None
             for c in b.cubes:
@@ -358,8 +368,8 @@ def start_wave(b: "Battle", cube: Cube) -> None:
     g = b.grid
     rows = g[max(0, int(cube.cy - half)):int(cube.cy + half) + 1, :]
     cols = g[:, max(0, int(cube.cx - half)):int(cube.cx + half) + 1]
-    gain_h = int(((rows >= 0) & (rows != cube.idx)).sum() + (rows < 0).sum() // 2)
-    gain_v = int(((cols >= 0) & (cols != cube.idx)).sum() + (cols < 0).sum() // 2)
+    gain_h = int(((rows >= 0) & (rows != cube.idx)).sum() + (rows == -1).sum() // 2)
+    gain_v = int(((cols >= 0) & (cols != cube.idx)).sum() + (cols == -1).sum() // 2)
     horizontal = gain_h >= gain_v
     if horizontal:
         b.waves.append(Wave(cube.idx, True, cube.cy, cube.cx, half))

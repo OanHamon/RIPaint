@@ -22,7 +22,7 @@ def _generate(count: int, seed_text: str | None, machine: bool) -> int:
 
     settings = cfg.load()
     # restes temporaires d'une génération annulée
-    for pattern in ("*.tmp.mp4", "*.tmp.wav", "*.ffmpeg.log"):
+    for pattern in ("*.tmp.mp4", "*.tmp.wav", "*.tmp.m4a", "*.ffmpeg.log"):
         for leftover in output_dir(settings).glob(pattern):
             try:
                 leftover.unlink()

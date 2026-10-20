@@ -2,6 +2,7 @@
 videos/
 *.tmp.mp4
 *.tmp.wav
+*.tmp.m4a
 *.ffmpeg.log
 
 # Réglages personnels (recréés au premier lancement)

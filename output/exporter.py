@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 import imageio_ffmpeg
+import numpy as np
 import pygame
 
 from audio.mixer import render_track, to_int16_stereo
@@ -85,6 +86,18 @@ def _write_wav(path: Path, mono) -> None:
         w.writeframes(pcm.tobytes())
 
 
+AAC_CEILING = 10 ** (-1 / 20)     # crête maximale tolérée après encodage : -1 dBFS
+
+
+def _decoded_peak(path: Path) -> float:
+    """Crête réelle (flottante, donc au-delà de 1.0 si dépassement) de l'audio encodé, lue sur les
+    canaux d'origine (pas de conversion mono, qui fausserait le niveau)."""
+    raw = subprocess.run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-i", str(path),
+                          "-f", "f32le", "-"], capture_output=True, creationflags=NO_WINDOW).stdout
+    data = np.frombuffer(raw, dtype=np.float32)
+    return float(np.abs(data).max()) if len(data) else 0.0
+
+
 def _run(cmd, err_path: Path) -> None:
     with open(err_path, "wb") as err:
         proc = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=err, creationflags=NO_WINDOW)
@@ -104,6 +117,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
 
+    temp_files: list[Path] = []
     battle = Battle(seed, settings)
     renderer = Renderer(battle)
     surf = pygame.Surface((LOGICAL_W, LOGICAL_H))
@@ -142,14 +156,25 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         music_vol = settings.music_volume if settings.music_on() else 0.0
         mono = render_track(battle.events, total, build_bank(settings.aim_duration), seed,
                             settings.master_volume, music_vol, settings.paint_sound, FPS)
-        _write_wav(tmp_audio, mono)
+        # encodage AAC puis contrôle de la crête APRÈS encodage : l'AAC peut ajouter quelques dB
+        # de dépassement sur des transitoires très secs ; si besoin on réencode un peu moins fort
+        tmp_aac = final.with_name(final.stem + ".audio.tmp.m4a")
+        temp_files.append(tmp_aac)
+        gain = 1.0
+        for _ in range(4):
+            _write_wav(tmp_audio, mono * gain)
+            _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y", "-i", str(tmp_audio),
+                  "-c:a", "aac", "-b:a", "256k", "-ar", str(SAMPLE_RATE), str(tmp_aac)], err_log)
+            peak = _decoded_peak(tmp_aac)
+            if peak <= AAC_CEILING:
+                break
+            gain *= AAC_CEILING / peak * 0.98
 
         summary = battle.result_text
         meta = {"seed": seed, "generator": "cube_battle", "result": summary, "settings": settings.to_dict()}
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
-              "-i", str(tmp_video), "-i", str(tmp_audio),
-              "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
-              "-c:a", "aac", "-b:a", "192k", "-ar", str(SAMPLE_RATE),
+              "-i", str(tmp_video), "-i", str(tmp_aac),
+              "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
               "-movflags", "+faststart",
               "-metadata", f"title=Cube Battle #{seed}",
               "-metadata", "comment=" + json.dumps(meta, ensure_ascii=False),
@@ -164,7 +189,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         return ExportResult(final, seed, total, total / FPS, len(battle.cubes), battle.hourglasses_taken,
                             summary, srt_path)
     finally:
-        for p in (tmp_video, tmp_audio, err_log):
+        for p in (tmp_video, tmp_audio, err_log, *temp_files):
             try:
                 p.unlink()
             except OSError:

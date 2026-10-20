@@ -39,6 +39,7 @@ class Renderer:
         self.lut = np.array([palette.TEAMS[c.team][1] for c in battle.cubes], dtype=np.uint8)
         self.arena = pygame.Surface((W, H))
         self.background = self._make_background()
+        self.obstacle_layer = self._make_obstacles()
         self.shade = _dither(palette.BLACK)
 
     # ---- Fond ----------------------------------------------------------------------------
@@ -61,6 +62,26 @@ class Renderer:
             pygame.draw.rect(bg, palette.WHITE, (cx, cy, 2, 2))
         return bg
 
+    def _make_obstacles(self) -> pygame.Surface:
+        """Blocs de pierre 8-bit : contour noir, relief clair en haut à gauche, foncé en bas
+        à droite, petites briques, ombre portée d'un pixel."""
+        b = self.b
+        layer = pygame.Surface((b.W, b.H), pygame.SRCALPHA)
+        for x0, y0, x1, y1 in b.obstacles:
+            w, h = x1 - x0, y1 - y0
+            pygame.draw.rect(layer, palette.NAVY_DARK, (x0 + 1, y0 + 1, w, h))          # ombre
+            pygame.draw.rect(layer, palette.BLACK, (x0, y0, w, h))
+            pygame.draw.rect(layer, palette.GREY, (x0 + 1, y0 + 1, w - 2, h - 2))
+            pygame.draw.line(layer, palette.GREY_LIGHT, (x0 + 1, y0 + 1), (x1 - 2, y0 + 1))
+            pygame.draw.line(layer, palette.GREY_LIGHT, (x0 + 1, y0 + 1), (x0 + 1, y1 - 2))
+            pygame.draw.line(layer, palette.GREY_DARK, (x0 + 2, y1 - 2), (x1 - 2, y1 - 2))
+            pygame.draw.line(layer, palette.GREY_DARK, (x1 - 2, y0 + 2), (x1 - 2, y1 - 2))
+            for yy in range(y0 + 4, y1 - 2, 4):                                          # briques
+                for xx in range(x0 + 3 + (2 if (yy - y0) % 8 else 0), x1 - 2, 5):
+                    layer.set_at((xx, yy), palette.GREY_DARK)
+            layer.set_at((x0 + 1, y0 + 1), palette.WHITE)
+        return layer
+
     # ---- Image complète ------------------------------------------------------------------
 
     def draw(self, surf: pygame.Surface, show_safe_zone: bool = False) -> None:
@@ -68,6 +89,7 @@ class Renderer:
         surf.blit(self.background, (0, 0))
         self._arena(surf)
         self._waves(surf)
+        surf.blit(self.obstacle_layer, (self.L.arena_x, self.L.arena_y))
         self._magnet_lines(surf)
         self._items(surf)
         self._bombs(surf)
@@ -362,7 +384,7 @@ class Renderer:
         y = L.scores_y
         pygame.draw.rect(surf, palette.BLACK, (x0, y, w, 7))
         pygame.draw.rect(surf, palette.GREY_DARK, (x0 + 1, y + 1, w - 2, 5))
-        total = b.W * b.H
+        total = b.paintable
         x = x0 + 1
         inner = w - 2
         acc = 0

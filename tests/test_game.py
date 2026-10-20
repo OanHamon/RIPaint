@@ -273,7 +273,7 @@ def test_bomb_explodes_after_fuse_and_pushes():
 
 def test_roller_paints_wider_trail():
     def painted(roller):
-        b = Battle(60, only("gun", item_interval=999))
+        b = Battle(60, only("gun", item_interval=999, obstacles=0))
         while b.frame < b.battle_start:
             b.step()
         if roller:
@@ -294,7 +294,8 @@ def test_bucket_wave_crosses_whole_arena():
     assert not b.waves
     a0, a1 = int(w.band - w.half), int(w.band + w.half) + 1
     band = b.grid[a0:a1, :] if w.horizontal else b.grid[:, a0:a1]
-    assert (band == cube.idx).all()
+    from game.physics import OBSTACLE
+    assert ((band == cube.idx) | (band == OBSTACLE)).all()
 
 
 def test_bucket_chooses_direction_with_most_enemy_paint():
@@ -441,3 +442,68 @@ def test_hit_by_opponent_item_triggers_hit_animation(kind):
 def test_bullet_still_faster_than_fastest_cube():
     s = Settings()
     assert s.bullet_speed > s.cube_speed * s.speed_ramp * s.boots_factor * 0.9
+
+
+
+# ---- Obstacles -------------------------------------------------------------------------
+
+@pytest.mark.parametrize("count", [0, 1, 2, 3, 4, 6])
+def test_obstacles_count_symmetry_and_corridors(count):
+    from game.physics import OBSTACLE
+    for seed in range(20):
+        b = Battle(seed, Settings(obstacles=count))
+        assert len(b.obstacles) <= count
+        if count <= 3:
+            assert len(b.obstacles) == count
+        else:
+            assert len(b.obstacles) >= 2
+        margin = 2 * b.settings.cube_size + 2
+        for x0, y0, x1, y1 in b.obstacles:
+            assert x0 >= margin and y0 >= margin and x1 <= b.W - margin and y1 <= b.H - margin
+            assert (b.grid[y0:y1, x0:x1] == OBSTACLE).all()
+            for c in b.cubes:                              # aucun cube ne démarre dessus
+                cx0, cy0, cx1, cy1 = c.rect()
+                assert not (x0 < cx1 and x1 > cx0 and y0 < cy1 and y1 > cy0)
+        xs = sorted((o[0] + o[2]) / 2 for o in b.obstacles)
+        assert all(abs(a + z - b.W) < 1.01 for a, z in zip(xs, reversed(xs)))   # miroir gauche/droite
+
+
+def test_no_obstacles_means_same_game_as_before():
+    a = run(321, Settings(obstacles=0))
+    assert a.obstacles == [] and a.paintable == a.W * a.H
+
+
+@pytest.mark.parametrize("seed", [7, 42, 1234])
+def test_obstacles_never_painted_never_entered(seed):
+    from game.physics import OBSTACLE
+
+    def check(b):
+        for x0, y0, x1, y1 in b.obstacles:
+            assert (b.grid[y0:y1, x0:x1] == OBSTACLE).all()
+            for c in b.cubes:
+                ox = min(c.cx + c.half, x1) - max(c.cx - c.half, x0)
+                oy = min(c.cy + c.half, y1) - max(c.cy - c.half, y0)
+                assert min(ox, oy) < 1.5, "cube dans un obstacle"
+        assert sum(b.percentages()) <= 100.0 + 1e-9
+
+    b = run(seed, Settings(obstacles=6, item_interval=1.5, max_items=5), check=check)
+    assert any(e.name.startswith("bounce") for e in b.events)
+
+
+def test_bullet_splats_on_obstacle():
+    from game import items
+    from game.entities import Bullet
+    b = Battle(9, Settings(obstacles=2))
+    x0, y0, x1, y1 = b.obstacles[0]
+    cy = (y0 + y1) / 2
+    for c in b.cubes:                                       # personne sur la trajectoire
+        c.cx, c.cy = b.W / 2, 4 + c.half
+    b.bullets.append(Bullet(0, 2.0, cy, 1.0, 0.0))
+    for _ in range(60):
+        items.update_bullets(b)
+    assert not b.bullets and any(e.name == "splat" for e in b.events)
+    assert int((b.grid[int(cy), x1:] == 0).sum()) == 0      # rien n'a traversé l'obstacle
+
+
+def test_obstacles_option_saved_from_settings():
+    assert Settings().obstacles == 3
