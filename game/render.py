@@ -383,7 +383,7 @@ class Renderer:
             return
         scale = 5 if age < 5 else 4
         cy = L.arena_y + b.H // 2 - (7 * scale) // 2
-        font.draw(surf, "GO !", L.arena_x + b.W // 2, cy, palette.GREEN_LIGHT, scale, "center")
+        font.draw(surf, "GO!", L.arena_x + b.W // 2, cy, palette.GREEN_LIGHT, scale, "center")
 
     def _outro(self, surf):
         b, L = self.b, self.L
@@ -392,7 +392,7 @@ class Renderer:
         if age < 30:
             font.draw(surf, "0", L.safe_cx, L.hud_y, palette.RED, 2, "center")
             if age % 6 < 4:
-                font.draw(surf, "FIN !", L.arena_x + b.W // 2, L.arena_y + b.H // 2 - 14, palette.RED, 4, "center")
+                font.draw(surf, "END!", L.arena_x + b.W // 2, L.arena_y + b.H // 2 - 14, palette.RED, 4, "center")
             return
         surf.blit(self.shade, (0, 0))
         r = b.result
@@ -419,13 +419,13 @@ class Renderer:
             y += 18
             if t >= 14:
                 color = palette.WHITE if (t // 12) % 2 == 0 else palette.YELLOW_LIGHT
-                font.draw(surf, "GAGNE !", cx, y, color, 2, "center")
+                font.draw(surf, "WINS!", cx, y, color, 2, "center")
             y += 20
             if t >= 22:
                 font.draw(surf, fmt_pct(r.ranking[0].pct), cx, y, palette.YELLOW_LIGHT, 2, "center")
             y += 20
             if r.by_items and t >= 26:
-                font.draw(surf, "(+ D'OBJETS)", cx, y, palette.GREY_LIGHT, 1, "center")
+                font.draw(surf, "(MORE ITEMS)", cx, y, palette.GREY_LIGHT, 1, "center")
                 y += 10
             others = r.ranking[1:]
         else:
@@ -438,7 +438,7 @@ class Renderer:
                 art.draw_cube(surf, cx - total_w // 2 + k * (size + gap) + (size - s) // 2, y + (size - s), s, c.team)
             y += size + 6
             if t >= 8:
-                font.draw(surf, "ÉGALITÉ !", cx, y, palette.WHITE, 2, "center")
+                font.draw(surf, "TIE!", cx, y, palette.WHITE, 2, "center")
             y += 20
             if t >= 16:
                 font.draw(surf, fmt_pct(r.ranking[0].pct), cx, y, palette.YELLOW_LIGHT, 2, "center")

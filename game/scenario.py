@@ -60,6 +60,6 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int) -> 
                 break
         dx, dy = random_direction(rng)
         cubes.append(CubeStart(team, x, y, dx, dy))
-    hooks = [h for h in settings.hooks if h.strip()] or ["CHOISIS TA COULEUR !"]
+    hooks = [h for h in settings.hooks if h.strip()] or ["PICK YOUR COLOR!"]
     hook = rng.choice(hooks)
     return Scenario(seed, cubes, hook, rng)

@@ -12,7 +12,7 @@ from output.srt import to_srt
 
 
 def test_font_supports_all_default_texts():
-    texts = cfg.DEFAULT_HOOKS + ["ROUGE GAGNE ! 45,3%", "ÉGALITÉ !", "+3S", "BLEU : PINCEAU !", "0123456789"]
+    texts = cfg.DEFAULT_HOOKS + ["RED WINS! 45.3%", "TIE!", "+3S", "BLUE: BRUSH!", "(MORE ITEMS)", "END!", "0123456789"]
     for t in texts:
         for ch in t:
             assert font.supported(ch), ch
@@ -103,3 +103,11 @@ def test_old_config_migrates_to_bigger_cubes(tmp_path):
     assert cfg.load(p).cube_size == 9
     p.write_text(json.dumps({"cube_size": 7, "config_version": 2}), encoding="utf-8")
     assert cfg.load(p).cube_size == 7
+
+
+def test_french_default_hooks_migrate_to_english(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"hooks": cfg.OLD_FRENCH_HOOKS, "config_version": 2}), encoding="utf-8")
+    assert cfg.load(p).hooks == cfg.DEFAULT_HOOKS
+    p.write_text(json.dumps({"hooks": ["MES PROPRES PHRASES !"], "config_version": 2}), encoding="utf-8")
+    assert cfg.load(p).hooks == ["MES PROPRES PHRASES !"]     # phrases personnalisées : gardées

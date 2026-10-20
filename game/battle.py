@@ -77,6 +77,7 @@ class Battle:
         self.next_tick: int | None = None
         self.tick_parity = 0
         self.result: Result | None = None
+        self.result_text = ""
 
         self.frame = -1
         self.battle_start = round(settings.intro_duration * FPS)
@@ -180,7 +181,7 @@ class Battle:
         self.emit("go")
         self.emit("music_start")
         self.emit("paint_start")
-        self.subtitle(self.frame, self.frame + 48, "GO !")
+        self.subtitle(self.frame, self.frame + 48, "GO!")
         for c in self.cubes:
             self._paint_under(c)
 
@@ -272,10 +273,11 @@ class Battle:
         if r.winner is not None:
             self.emit("victory", frame=f + 54)
             w = r.ranking[0]
-            text = f"{w.team} GAGNE ! {fmt_pct(w.pct)}"
+            text = f"{w.team} WINS! {fmt_pct(w.pct)}"
         else:
             self.emit("draw", frame=f + 54)
-            text = "ÉGALITÉ ! " + " / ".join(self.cubes[i].team for i in r.tied)
+            text = "TIE! " + " / ".join(self.cubes[i].team for i in r.tied)
+        self.result_text = text
         self.subtitle(f + 30, self.total_frames, text)
 
     def _outro(self, f: int) -> None:
@@ -304,7 +306,7 @@ class Battle:
 
 
 def fmt_pct(p: float) -> str:
-    return f"{p:.1f}%".replace(".", ",")
+    return f"{p:.1f}%"
 
 
 def compute_result(cubes: list[Cube], counts, total_cells: int) -> Result:

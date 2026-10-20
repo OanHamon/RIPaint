@@ -22,7 +22,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
-from game.battle import Battle, fmt_pct
+from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
 
@@ -97,8 +97,9 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     """Calcule et encode une partie. `progress(frame, total)` est appelé régulièrement ;
     `cancel()` peut renvoyer True pour interrompre."""
     out_dir = out_dir or output_dir(settings)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    final = out_dir / f"combat_{seed}_{stamp}.mp4"
+    # date de création en tête du nom : les vidéos se trient naturellement par date
+    stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
+    final = out_dir / f"{stamp}_cube-battle_seed{seed}.mp4"
     tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
@@ -143,18 +144,14 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
                             settings.master_volume, music_vol, settings.paint_sound, FPS)
         _write_wav(tmp_audio, mono)
 
-        r = battle.result
-        if r.winner is not None:
-            summary = f"{r.ranking[0].team} GAGNE ! {fmt_pct(r.ranking[0].pct)}"
-        else:
-            summary = "ÉGALITÉ ! " + " / ".join(battle.cubes[i].team for i in r.tied)
+        summary = battle.result_text
         meta = {"seed": seed, "generator": "cube_battle", "result": summary, "settings": settings.to_dict()}
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
               "-i", str(tmp_video), "-i", str(tmp_audio),
               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
               "-c:a", "aac", "-b:a", "192k", "-ar", str(SAMPLE_RATE),
               "-movflags", "+faststart",
-              "-metadata", f"title=Bataille de cubes #{seed}",
+              "-metadata", f"title=Cube Battle #{seed}",
               "-metadata", "comment=" + json.dumps(meta, ensure_ascii=False),
               str(final)], err_log)
 

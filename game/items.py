@@ -17,8 +17,9 @@ if TYPE_CHECKING:
 
 SPAWN_ANIM = 36            # images de clignotement avant de pouvoir être ramassé
 WALL_MARGIN = 9            # distance minimale au mur (centre de l'objet)
-ITEM_NAMES = {"gun": "FUSIL", "brush": "PINCEAU", "potion": "POTION", "hourglass": "SABLIER",
-              "bomb": "BOMBE", "roller": "ROULEAU", "bucket": "SEAU", "ice": "GLACE", "magnet": "AIMANT"}
+# Textes affichés dans la vidéo (en anglais)
+ITEM_NAMES = {"gun": "GUN", "brush": "BRUSH", "potion": "POTION", "hourglass": "TIMER",
+              "bomb": "BOMB", "roller": "ROLLER", "bucket": "RAINBOW", "ice": "ICE", "magnet": "MAGNET"}
 BOMB_KNOCKBACK = 190.0
 WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
@@ -94,7 +95,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     light = palette.TEAMS[cube.team][2]
     # le texte s'affiche du côté de l'arène opposé au cube, pour ne pas cacher l'action
     anchor = "bottom" if cube.cy < b.H / 2 else "top"
-    b.popup(f"{cube.team} : {ITEM_NAMES[item.kind]} !", light, anchor=anchor)
+    b.popup(f"{cube.team}: {ITEM_NAMES[item.kind]}!", light, anchor=anchor)
     b.sparkle(b.layout.arena_x + item.x, b.layout.arena_y + item.y, light, 10)
 
     if item.kind == "gun":

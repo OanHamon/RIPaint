@@ -112,7 +112,7 @@ class ControlPanel:
         ttk.Label(box, text="Seed (optionnelle)").grid(row=1, column=0, sticky="w")
         ttk.Entry(box, textvariable=self.seed, width=18).grid(row=1, column=1, sticky="w", padx=6, pady=2)
         self.seed.trace_add("write", lambda *_: self.on_change())
-        ttk.Checkbutton(box, text="Exporter les sous-titres (.srt)", variable=self.srt,
+        ttk.Checkbutton(box, text="Exporter aussi les sous-titres (.srt, importables sur TikTok)", variable=self.srt,
                         command=self.on_change).grid(row=2, column=0, columnspan=2, sticky="w")
 
         # --- Boutons ---

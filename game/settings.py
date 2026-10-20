@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet"]
@@ -15,7 +15,17 @@ ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hou
                "bomb": "Bombe", "roller": "Rouleau", "bucket": "Seau arc-en-ciel", "ice": "Glace",
                "magnet": "Aimant"}
 
+# Phrases d'accroche affichées dans la vidéo (en anglais)
 DEFAULT_HOOKS = [
+    "PICK YOUR COLOR!",
+    "WHO WILL WIN?",
+    "BET ON A CUBE!",
+    "COMMENT YOUR COLOR!",
+    "WHICH COLOR WINS?",
+    "WILL YOUR CUBE WIN?",
+    "WHO PAINTS THE MOST?",
+]
+OLD_FRENCH_HOOKS = [
     "CHOISIS TA COULEUR !",
     "QUI VA GAGNER ?",
     "PARIE SUR UN CUBE !",
@@ -138,6 +148,8 @@ def migrate(data: dict) -> dict:
         for key, old_default in (("cube_size", 7), ("brush_radius", 20)):
             if data.get(key) == old_default:
                 data.pop(key)
+    if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:
+        data.pop("hooks")       # accroches par défaut en français -> nouvelles accroches anglaises
     data["config_version"] = CONFIG_VERSION
     return data
 

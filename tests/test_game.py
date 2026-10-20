@@ -47,7 +47,7 @@ def test_scenario_rules(seed):
     teams = [c.team for c in b.cubes]
     assert len(set(teams)) == len(teams)
     if len(teams) < 4:
-        assert "VERT" not in teams
+        assert "GREEN" not in teams
     for c in b.cubes:
         ang = math.degrees(math.atan2(abs(c.dy), abs(c.dx)))
         assert 19.9 <= ang <= 70.1
@@ -181,7 +181,7 @@ def test_potion_grows_then_shrinks():
 
 
 def test_tie_break_by_items_then_draw():
-    cubes = [Cube(0, "ROUGE", 0, 0, 1, 0, 7), Cube(1, "BLEU", 0, 0, 1, 0, 7)]
+    cubes = [Cube(0, "RED", 0, 0, 1, 0, 7), Cube(1, "BLUE", 0, 0, 1, 0, 7)]
     cubes[0].items, cubes[1].items = 1, 3
     r = compute_result(cubes, np.array([100, 100]), 1000)
     assert r.winner == 1 and r.by_items
@@ -349,3 +349,11 @@ def test_full_game_with_each_new_item(kind):
     assert f"pickup_{kind}" in names
     r = Renderer(b)
     r.draw(pygame.Surface((135, 240)))
+
+
+def test_in_game_texts_are_english():
+    b = run(90, only("gun", item_interval=1.0))
+    texts = " ".join(t for _, _, t in b.subtitles)
+    for french in ("GAGNE", "ÉGALITÉ", "FUSIL", "ROUGE", "BLEU", "JAUNE", "VERT", " !"):
+        assert french not in texts
+    assert "WINS!" in texts or "TIE!" in texts

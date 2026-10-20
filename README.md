@@ -47,7 +47,7 @@ python -m pip install -r requirements.txt
 | Volume général / musique | Volume final de la vidéo et niveau de la musique de fond. |
 | Nombre de vidéos (X) | « Générer » crée X parties différentes = X vidéos. |
 | Seed (optionnelle) | Si remplie, l'aperçu et la génération utilisent cette seed (puis seed+1, seed+2… pour plusieurs vidéos). |
-| Sous-titres .srt | Exporte aussi un fichier .srt à côté de chaque vidéo. |
+| Sous-titres .srt | Exporte aussi un fichier de sous-titres .srt (textes + horaires) à côté de chaque vidéo, à importer sur TikTok ou dans un logiciel de montage. |
 | Aperçu | Lance une partie en temps réel avec le son, sans enregistrer. |
 | Ouvrir le dossier des vidéos | Ouvre `videos/`. |
 | Réglages avancés… | Ouvre `config.json` (phrases d'accroche, zones de sécurité, durées, vitesses…). |
@@ -70,7 +70,8 @@ python main.py --generate 1 --seed 1234
 python main.py --preview --seed 1234
 ```
 
-Les vidéos sont enregistrées dans `videos/combat_<seed>_<date-heure>.mp4`
+Les vidéos sont enregistrées dans `videos/<date>_<heure>_cube-battle_seed<seed>.mp4`
+(ex. `2026-10-20_21h15m31s_cube-battle_seed28023524.mp4`)
 (+ `.srt` si l'option est cochée). Pour refaire une partie qui vous a plu, reprenez la seed du nom
 de fichier. Les réglages utilisés sont aussi inscrits dans les métadonnées du MP4.
 
