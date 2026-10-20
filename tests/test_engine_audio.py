@@ -90,3 +90,15 @@ def test_percentages_normalized():
     p = s.item_percentages()
     assert abs(sum(p.values()) - 100) < 1e-9
     assert p["potion"] == 0 and abs(p["hourglass"] - 50) < 1e-9
+
+
+def test_old_config_migrates_to_bigger_cubes(tmp_path):
+    p = tmp_path / "c.json"
+    p.write_text(json.dumps({"cube_size": 7, "brush_radius": 20, "max_items": 4}), encoding="utf-8")
+    s = cfg.load(p)
+    assert s.cube_size == cfg.Settings().cube_size == 11
+    assert s.brush_radius == 26 and s.max_items == 4
+    p.write_text(json.dumps({"cube_size": 9}), encoding="utf-8")   # valeur choisie par l'utilisateur : gardée
+    assert cfg.load(p).cube_size == 9
+    p.write_text(json.dumps({"cube_size": 7, "config_version": 2}), encoding="utf-8")
+    assert cfg.load(p).cube_size == 7

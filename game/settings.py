@@ -7,6 +7,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
+CONFIG_VERSION = 2
+
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass"]
 ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hourglass": "Sablier"}
 
@@ -37,7 +39,7 @@ class Settings:
     aim_duration: float = 0.3
     bullet_speed: float = 110.0       # px logiques / s
     stun_duration: float = 5.0
-    brush_radius: int = 20
+    brush_radius: int = 26
     slow_duration: float = 3.0
     slow_factor: float = 0.45
     potion_duration: float = 5.0
@@ -47,7 +49,8 @@ class Settings:
     intro_duration: float = 5.0
     battle_duration: float = 50.0
     outro_duration: float = 5.0
-    cube_size: int = 7
+    players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
+    cube_size: int = 11
     cube_speed: float = 42.0          # px logiques / s
 
     # Génération
@@ -70,6 +73,7 @@ class Settings:
     safe_right: int = 140
 
     hooks: list = field(default_factory=lambda: list(DEFAULT_HOOKS))
+    config_version: int = CONFIG_VERSION
 
     def item_weights(self) -> dict[str, float]:
         return {k: max(0.0, float(getattr(self, f"prob_{k}"))) for k in ITEM_KINDS}
@@ -110,10 +114,22 @@ class Settings:
         return self.music_enabled and self.music_volume > 0
 
 
+def migrate(data: dict) -> dict:
+    """Met à jour un config.json d'une version précédente (les valeurs restées aux anciens
+    défauts prennent les nouveaux défauts ; celles modifiées par l'utilisateur sont gardées)."""
+    data = dict(data)
+    if int(data.get("config_version", 1)) < 2:
+        for key, old_default in (("cube_size", 7), ("brush_radius", 20)):
+            if data.get(key) == old_default:
+                data.pop(key)
+    data["config_version"] = CONFIG_VERSION
+    return data
+
+
 def load(path: Path = CONFIG_PATH) -> Settings:
     if path.exists():
         try:
-            return Settings.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            return Settings.from_dict(migrate(json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, json.JSONDecodeError):
             pass
     return Settings()

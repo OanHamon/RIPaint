@@ -222,3 +222,19 @@ def test_hud_inside_safe_zone():
     assert L.hud_y >= L.safe.top
     assert L.arena_x + b.W + 2 <= L.safe_x1
     assert L.scores_y + 20 <= L.safe_y1
+
+
+@pytest.mark.parametrize("players", [2, 3, 4])
+def test_players_option_forces_cube_count(players):
+    for seed in range(15):
+        b = Battle(seed, Settings(players=players))
+        assert len(b.cubes) == players
+        assert len({c.team for c in b.cubes}) == players
+
+
+def test_players_random_keeps_seed_meaning():
+    # en mode aléatoire, une seed donne la même partie qu'avant l'ajout de l'option
+    for seed in range(10):
+        a = Battle(seed, Settings(players=0))
+        b = Battle(seed, Settings(players=len(a.cubes)))
+        assert [(c.team, c.cx, c.cy) for c in a.cubes] == [(c.team, c.cx, c.cy) for c in b.cubes]

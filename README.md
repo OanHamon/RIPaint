@@ -28,6 +28,8 @@ python -m pip install -r requirements.txt
 
 | Réglage | Effet |
 |---|---|
+| Nombre de joueurs | « Aléatoire (2 à 4) » ou 2, 3, 4 cubes fixes. |
+| Taille des cubes | En pixels logiques (11 par défaut ; 5 à 16). Plus gros = plus de chocs et d'interactions. |
 | Probabilité des objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
 | Intervalle | Temps entre deux apparitions d'objets (5 s par défaut). |
 | Objets max en même temps / Sabliers max | Limites (3 / 3 par défaut). |
@@ -68,6 +70,8 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 
 | Clé | Défaut | Rôle |
 |---|---|---|
+| `players` | 0 | Nombre de cubes : 0 = aléatoire (2 à 4), sinon 2, 3 ou 4 |
+| `cube_size` | 11 | Taille des cubes en pixels logiques (x2 avec la potion) |
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |
 | `safe_top` / `safe_bottom` / `safe_right` | 130 / 400 / 140 | Zones de sécurité TikTok en pixels de la vidéo finale |
 | `intro_duration` / `battle_duration` / `outro_duration` | 5 / 50 / 5 | Durées en secondes |
@@ -75,7 +79,7 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 | `aim_duration` | 0.3 | Durée de la ligne de visée du fusil |
 | `stun_duration` / `slow_duration` / `potion_duration` | 5 / 3 / 5 | Durées des effets |
 | `cube_speed` / `bullet_speed` | 42 / 110 | Vitesses en pixels logiques par seconde |
-| `brush_radius` | 20 | Rayon du coup de gros pinceau |
+| `brush_radius` | 26 | Rayon du coup de gros pinceau |
 | `paint_sound` | false | Léger souffle continu pendant la peinture |
 | `music_enabled` | true | Musique de fond |
 | `crf` / `x264_preset` | 18 / medium | Qualité d'encodage (plus petit = meilleure qualité) |

@@ -40,7 +40,9 @@ def random_direction(rng: random.Random) -> tuple[float, float]:
 
 def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int) -> Scenario:
     rng = random.Random(seed)
-    n = rng.randint(2, 4)
+    n = rng.randint(2, 4)            # toujours tiré, pour que la seed garde le même sens
+    if settings.players in (2, 3, 4):
+        n = settings.players
     if n == 4:
         teams = palette.PRIMARY_TEAMS + [palette.FOURTH_TEAM]
         rng.shuffle(teams)

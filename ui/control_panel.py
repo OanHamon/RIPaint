@@ -19,6 +19,7 @@ from game.settings import ITEM_KINDS, ITEM_LABELS
 ROOT = cfg.ROOT
 MAIN = ROOT / "main.py"
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+PLAYER_CHOICES = {0: "Aléatoire (2 à 4)", 2: "2 joueurs", 3: "3 joueurs", 4: "4 joueurs"}
 
 
 def python_exe() -> str:
@@ -46,9 +47,21 @@ class ControlPanel:
         main = ttk.Frame(root, padding=10)
         main.grid(sticky="nsew")
 
+        # --- Partie ---
+        box = ttk.LabelFrame(main, text="Partie", padding=8)
+        box.grid(row=0, column=0, sticky="ew", **pad)
+        ttk.Label(box, text="Nombre de joueurs").grid(row=0, column=0, sticky="w")
+        self.players = tk.StringVar(value=PLAYER_CHOICES[self.s.players if self.s.players in (2, 3, 4) else 0])
+        combo = ttk.Combobox(box, textvariable=self.players, values=list(PLAYER_CHOICES.values()),
+                             state="readonly", width=18)
+        combo.grid(row=0, column=1, sticky="w", padx=6, pady=2)
+        combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        self.cube_size = tk.IntVar(value=self.s.cube_size)
+        self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
+
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
-        box.grid(row=0, column=0, sticky="ew", **pad)
+        box.grid(row=1, column=0, sticky="ew", **pad)
         self.prob_vars, self.pct_labels = {}, {}
         for r, kind in enumerate(ITEM_KINDS):
             var = tk.DoubleVar(value=getattr(self.s, f"prob_{kind}"))
@@ -63,7 +76,7 @@ class ControlPanel:
 
         # --- Apparition ---
         box = ttk.LabelFrame(main, text="Apparition des objets", padding=8)
-        box.grid(row=1, column=0, sticky="ew", **pad)
+        box.grid(row=2, column=0, sticky="ew", **pad)
         self.interval = tk.DoubleVar(value=self.s.item_interval)
         self.max_items = tk.IntVar(value=self.s.max_items)
         self.max_hourglasses = tk.IntVar(value=self.s.max_hourglasses)
@@ -73,7 +86,7 @@ class ControlPanel:
 
         # --- Audio ---
         box = ttk.LabelFrame(main, text="Son", padding=8)
-        box.grid(row=2, column=0, sticky="ew", **pad)
+        box.grid(row=3, column=0, sticky="ew", **pad)
         self.master = tk.DoubleVar(value=round(self.s.master_volume * 100))
         self.music = tk.DoubleVar(value=round(self.s.music_volume * 100))
         self.music_on = tk.BooleanVar(value=self.s.music_enabled)
@@ -91,7 +104,7 @@ class ControlPanel:
 
         # --- Génération ---
         box = ttk.LabelFrame(main, text="Génération", padding=8)
-        box.grid(row=3, column=0, sticky="ew", **pad)
+        box.grid(row=4, column=0, sticky="ew", **pad)
         self.count = tk.IntVar(value=self.s.video_count)
         self.seed = tk.StringVar(value=self.s.seed)
         self.srt = tk.BooleanVar(value=self.s.export_srt)
@@ -104,7 +117,7 @@ class ControlPanel:
 
         # --- Boutons ---
         bar = ttk.Frame(main)
-        bar.grid(row=4, column=0, sticky="ew", **pad)
+        bar.grid(row=5, column=0, sticky="ew", **pad)
         self.btn_preview = ttk.Button(bar, text="Aperçu", command=self.preview)
         self.btn_preview.pack(side="left")
         self.btn_generate = ttk.Button(bar, text="Générer", command=self.generate)
@@ -113,16 +126,16 @@ class ControlPanel:
         self.btn_cancel.pack(side="left")
 
         self.progress = ttk.Progressbar(main, length=380, maximum=100)
-        self.progress.grid(row=5, column=0, sticky="ew", **pad)
+        self.progress.grid(row=6, column=0, sticky="ew", **pad)
         self.status = ttk.Label(main, text="Prêt.", wraplength=380)
-        self.status.grid(row=6, column=0, sticky="w", **pad)
+        self.status.grid(row=7, column=0, sticky="w", **pad)
 
         bar2 = ttk.Frame(main)
-        bar2.grid(row=7, column=0, sticky="ew", **pad)
+        bar2.grid(row=8, column=0, sticky="ew", **pad)
         ttk.Button(bar2, text="Ouvrir le dossier des vidéos", command=self.open_folder).pack(side="left")
         ttk.Button(bar2, text="Réglages avancés…", command=self.open_config).pack(side="left", padx=6)
 
-        for var in (self.interval, self.max_items, self.max_hourglasses, self.count):
+        for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size):
             var.trace_add("write", lambda *_: self.on_change())
         self.on_change(save=False)
 
@@ -150,6 +163,9 @@ class ControlPanel:
 
     def collect(self) -> cfg.Settings:
         s = self.s
+        label = self.players.get()
+        s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
+        s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
         for kind, var in self.prob_vars.items():
             setattr(s, f"prob_{kind}", float(round(self._get(var, 0))))
         s.item_interval = max(0.5, float(self._get(self.interval, s.item_interval)))
