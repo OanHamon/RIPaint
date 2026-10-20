@@ -86,7 +86,8 @@ def test_settings_roundtrip(tmp_path):
 
 
 def test_percentages_normalized():
-    s = cfg.Settings(prob_gun=50, prob_brush=50, prob_potion=0, prob_hourglass=100)
+    s = cfg.Settings(**{f"prob_{k}": 0 for k in cfg.ITEM_KINDS})
+    s.prob_gun, s.prob_brush, s.prob_hourglass = 50, 50, 100
     p = s.item_percentages()
     assert abs(sum(p.values()) - 100) < 1e-9
     assert p["potion"] == 0 and abs(p["hourglass"] - 50) < 1e-9

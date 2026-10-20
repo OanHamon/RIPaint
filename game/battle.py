@@ -62,6 +62,9 @@ class Battle:
         self.aims = []
         self.bullets = []
         self.swipes = []
+        self.bombs = []
+        self.waves = []
+        self.shake = 0
         self.particles: list[Particle] = []
         self.popups: list[Popup] = []
         self.events: list[SoundEvent] = []
@@ -164,6 +167,8 @@ class Battle:
         self._update_particles()
         if self.timer_flash > 0:
             self.timer_flash -= 1
+        if self.shake > 0:
+            self.shake -= 1
 
     def _intro(self, f: int) -> None:
         if (self.battle_start - f) % FPS == 0:
@@ -195,6 +200,7 @@ class Battle:
             if c.slow > 0:
                 c.slow -= 1
             item_logic.update_resize(self, c)
+            item_logic.update_cube_timers(self, c)
 
         for c in self.cubes:
             speed = s.cube_speed * (s.slow_factor if c.slow > 0 else 1.0)
@@ -214,10 +220,13 @@ class Battle:
             if c.active:
                 self._paint_under(c)
 
+        item_logic.update_magnets(self)
         item_logic.check_pickups(self)
         item_logic.update_aims(self)
         item_logic.update_bullets(self)
         item_logic.update_swipes(self)
+        item_logic.update_bombs(self)
+        item_logic.update_waves(self)
 
         if (f - self.battle_start) % STUCK_CHECK == 0 and f > self.battle_start:
             for c in self.cubes:
@@ -233,6 +242,8 @@ class Battle:
     def _paint_under(self, c: Cube) -> None:
         x0, y0, x1, y1 = c.rect()
         physics.paint_rect(self.grid, x0, y0, x1, y1, c.idx)
+        if c.roller > 0:
+            physics.paint_disc(self.grid, c.cx, c.cy, item_logic.paint_size(self, c), c.idx)
 
     def _ticks(self, f: int) -> None:
         remaining = self.battle_end - f
@@ -253,6 +264,8 @@ class Battle:
         self.aims.clear()
         self.bullets.clear()
         self.swipes.clear()
+        self.bombs.clear()
+        self.waves.clear()
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
         self.result = compute_result(self.cubes, self.counts, self.W * self.H)
         r = self.result

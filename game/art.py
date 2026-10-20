@@ -18,6 +18,8 @@ COLORS = {
     "O": palette.YELLOW,
     "S": palette.SKY,
     "R": palette.RED,
+    "N": palette.GREY_DARK,
+    "V": palette.GREEN,
 }
 
 GUN = (
@@ -86,7 +88,81 @@ SLOW = (
     "..S..",
 )
 
-ITEM_SPRITES = {"gun": GUN, "brush": BRUSH, "potion": POTION, "hourglass": HOURGLASS}
+BOMB = (
+    "......KY.",
+    ".....K...",
+    "...KKKK..",
+    "..KNNNNK.",
+    ".KNWNNNNK",
+    ".KNNNNNNK",
+    ".KNNNNNNK",
+    "..KNNNNK.",
+    "...KKKK..",
+)
+
+ROLLER = (
+    "KKKKKKKK.",
+    "KWWWWWWK.",
+    "KSSSSSSK.",
+    "KKKKKKKK.",
+    ".......K.",
+    "....KKKK.",
+    "....KBK..",
+    "....KBK..",
+    "....KKK..",
+)
+
+BUCKET = (
+    ".KKKKKKK.",
+    "K.......K",
+    "KKKKKKKKK",
+    "KRRRRRRRK",
+    ".KOOOOOK.",
+    ".KVVVVVK.",
+    ".KSSSSSK.",
+    "..KMMMK..",
+    "..KKKKK..",
+)
+
+ICE = (
+    "KKKKKKKKK",
+    "KWWWSSSSK",
+    "KWSSSSSSK",
+    "KWSSWSSSK",
+    "KSSWSSSSK",
+    "KSSSSSWSK",
+    "KSSSSWSSK",
+    "KSSSSSSSK",
+    "KKKKKKKKK",
+)
+
+MAGNET = (
+    "KKKK.KKKK",
+    "KGGK.KGGK",
+    "KRRK.KRRK",
+    "KRRK.KRRK",
+    "KRRKKKRRK",
+    "KRRRRRRRK",
+    ".KRRRRRK.",
+    "..KKKKK..",
+    ".........",
+)
+
+MINI_ROLLER = (
+    "KKKKK",
+    "KWWWK",
+    "KKKKK",
+    "..K..",
+)
+
+MINI_MAGNET = (
+    "R.R",
+    "R.R",
+    "RRR",
+)
+
+ITEM_SPRITES = {"gun": GUN, "brush": BRUSH, "potion": POTION, "hourglass": HOURGLASS, "bomb": BOMB,
+                "roller": ROLLER, "bucket": BUCKET, "ice": ICE, "magnet": MAGNET}
 
 
 def item_sprite(kind: str) -> pygame.Surface:
@@ -105,8 +181,16 @@ def slow_icon() -> pygame.Surface:
     return sprite(SLOW, COLORS)
 
 
+def roller_icon() -> pygame.Surface:
+    return sprite(MINI_ROLLER, COLORS)
+
+
+def magnet_icon() -> pygame.Surface:
+    return sprite(MINI_MAGNET, COLORS)
+
+
 def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(0.0, 0.0),
-              stunned: bool = False, flash: bool = False) -> None:
+              stunned: bool = False, flash: bool = False, frozen: bool = False) -> None:
     """Cube 8-bit : contour noir, corps clair, ombre foncée, reflet, yeux qui regardent
     dans la direction du mouvement (croix si assommé)."""
     dark, mid, light = palette.TEAMS[team]
@@ -141,3 +225,11 @@ def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(
     else:
         pygame.draw.rect(surf, K, (left, top, e, e + (1 if size >= 10 else 0)))
         pygame.draw.rect(surf, K, (right, top, e, e + (1 if size >= 10 else 0)))
+    if frozen:
+        # bloc de glace : trame bleu pâle sur le corps, contour glacé et reflets blancs
+        for py in range(y + 1, y + size - 1):
+            for px in range(x + 1 + (py - y) % 2, x + size - 1, 2):
+                surf.set_at((px, py), palette.SKY)
+        pygame.draw.rect(surf, palette.SKY, (x - 1, y - 1, size + 2, size + 2), 1)
+        surf.set_at((x + size - 2, y + 1), palette.WHITE)
+        surf.set_at((x + 1, y + size - 2), palette.WHITE)

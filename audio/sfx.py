@@ -55,6 +55,16 @@ _meta("tock", 9, 0.55, "tick")
 _meta("buzzer", 10, 0.9)
 _meta("victory", 10, 0.85)
 _meta("draw", 10, 0.85)
+for _k in ("bomb", "roller", "bucket", "ice", "magnet"):
+    _meta(f"pickup_{_k}", 7, 0.7, "pickup")
+_meta("bomb_drop", 6, 0.6)
+_meta("bomb_tick", 6, 0.45)
+_meta("explosion", 9, 0.95)
+_meta("roller_end", 5, 0.45)
+_meta("wave", 8, 0.75)
+_meta("freeze", 8, 0.7)
+_meta("thaw", 5, 0.5)
+_meta("magnet", 7, 0.55)
 
 
 def _noise(dur, rate, vol, a=0.001, d=0.05, s=0.3, r=0.05, seed=1, rate_end=None):
@@ -184,6 +194,36 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
                   for nm in ("E5", "D#5", "D5")], tone("square", note("C#5"), 0.8, duty=0.5, vol=0.4, vibrato=0.04, r=0.3)), 0),
         (concat(*[tone("triangle", note(nm), 0.3, vol=0.6) for nm in ("A2", "G#2", "G2")], tone("triangle", note("F#2"), 0.8, vol=0.6, r=0.3)), 0),
     )
+
+    # Nouveaux objets
+    bank["pickup_bomb"] = _jingle(["C4", "G3", "C4", "F#4"], 0.06, duty=0.5, vol=0.45, bass=["C2", "C2"])
+    bank["pickup_roller"] = _jingle(["D5", "F#5", "A5", "D6", "A5", "D6"], 0.04, duty=0.25, vol=0.42)
+    bank["pickup_bucket"] = _jingle(["C5", "E5", "G5", "B5", "D6", "F#6", "A6"], 0.03, duty=0.125, vol=0.45)
+    bank["pickup_ice"] = _jingle(["E6", "B6", "E7", "B6"], 0.05, wave="triangle", vol=0.6)
+    bank["pickup_magnet"] = _jingle(["G4", "D5", "G4", "D5", "G5"], 0.05, duty=0.25, vol=0.42)
+    bank["bomb_drop"] = tone("triangle", 320, 0.1, f_end=110, vol=0.8, a=0.001, d=0.05, s=0.4, r=0.04)
+    bank["bomb_tick"] = tone("square", 1800, 0.03, duty=0.5, vol=0.4, a=0.0005, d=0.01, s=0.5, r=0.01)
+    bank["explosion"] = overlay(
+        (lowpass(_noise(0.75, 3500, 1.0, d=0.15, s=0.35, r=0.45, seed=12, rate_end=180), 4), 0),
+        (tone("triangle", 130, 0.55, f_end=32, vol=1.0, a=0.001, d=0.2, s=0.4, r=0.25), 0),
+        (tone("square", 90, 0.25, f_end=40, duty=0.5, vol=0.3), 0),
+    )
+    bank["roller_end"] = tone("square", 600, 0.12, f_end=300, duty=0.25, vol=0.35)
+    n = n_samples(0.6)
+    bank["wave"] = overlay(
+        (lowpass((osc("noise", np.geomspace(1500, 10000, n), n, seed=13) * adsr(n, 0.05, 0.1, 0.6, 0.3) * 0.6)
+                 .astype(np.float32), 3), 0),
+        (arpeggio([note(x) for x in ("C5", "E5", "G5", "C6", "E6", "G6", "C7", "E7")], 0.03, "square", 0.25, 0.125), 0.05),
+    )
+    bank["freeze"] = overlay(
+        (arpeggio([note(x) for x in ("E7", "B6", "G#6", "E6", "B5", "G#5")], 0.045, "triangle", 0.6), 0),
+        (lowpass(_noise(0.3, 14000, 0.35, d=0.1, s=0.3, r=0.15, seed=14), 2), 0),
+    )
+    bank["thaw"] = overlay(
+        (_noise(0.08, 9000, 0.6, d=0.03, s=0.2, r=0.04, seed=15), 0),
+        (tone("square", 800, 0.1, f_end=1600, duty=0.25, vol=0.35), 0.02),
+    )
+    bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 
     return {k: np.asarray(v, dtype=np.float32) for k, v in bank.items()}
 

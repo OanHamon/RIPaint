@@ -67,7 +67,7 @@ def clamp(cube: Cube, w: int, h: int) -> tuple[bool, bool]:
 
 def move(cube: Cube, speed: float, w: int, h: int) -> bool:
     """Avance d'une image. Renvoie True si le cube a rebondi sur un mur."""
-    v = 0.0 if cube.stun > 0 else speed
+    v = 0.0 if cube.immobile else speed
     cube.cx += cube.dx * v * DT + cube.kb_x * DT
     cube.cy += cube.dy * v * DT + cube.kb_y * DT
     cube.kb_x *= KB_DECAY
@@ -77,12 +77,12 @@ def move(cube: Cube, speed: float, w: int, h: int) -> bool:
     if abs(cube.kb_y) < 0.5:
         cube.kb_y = 0.0
     hx, hy = clamp(cube, w, h)
-    return (hx or hy) and cube.stun <= 0
+    return (hx or hy) and not cube.immobile
 
 
 def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4) -> list[tuple[int, int]]:
     """Sépare les cubes qui se chevauchent le long de l'axe de moindre pénétration et
-    renvoie les directions vers l'extérieur (vitesse constante). Un cube assommé est immobile."""
+    renvoie les directions vers l'extérieur (vitesse constante). Un cube assommé ou gelé est immobile."""
     collided: list[tuple[int, int]] = []
     for _ in range(iterations):
         any_overlap = False
@@ -94,8 +94,8 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4) -
                 if ox <= 1e-6 or oy <= 1e-6:
                     continue
                 any_overlap = True
-                wa = 0.0 if a.stun > 0 else 1.0
-                wb = 0.0 if b.stun > 0 else 1.0
+                wa = 0.0 if a.immobile else 1.0
+                wb = 0.0 if b.immobile else 1.0
                 if wa + wb == 0:
                     wa = wb = 1.0
                 sa = wa / (wa + wb)
@@ -103,17 +103,17 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4) -
                     s = -1.0 if (a.cx, a.idx) < (b.cx, b.idx) else 1.0
                     a.cx += s * ox * sa
                     b.cx -= s * ox * (1 - sa)
-                    if a.stun <= 0:
+                    if not a.immobile:
                         a.dx = s * abs(a.dx)
-                    if b.stun <= 0:
+                    if not b.immobile:
                         b.dx = -s * abs(b.dx)
                 else:
                     s = -1.0 if (a.cy, a.idx) < (b.cy, b.idx) else 1.0
                     a.cy += s * oy * sa
                     b.cy -= s * oy * (1 - sa)
-                    if a.stun <= 0:
+                    if not a.immobile:
                         a.dy = s * abs(a.dy)
-                    if b.stun <= 0:
+                    if not b.immobile:
                         b.dy = -s * abs(b.dy)
                 if (i, j) not in collided:
                     collided.append((i, j))

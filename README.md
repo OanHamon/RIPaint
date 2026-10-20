@@ -1,8 +1,19 @@
 # Bataille de cubes 8-bit — générateur de vidéos TikTok
 
 Génère des vidéos verticales « satisfaisantes » prêtes à publier : 2 à 4 cubes colorés peignent
-une arène en rebondissant, ramassent des objets (Fusil, Gros pinceau, Potion, Sablier), et la
-couleur qui couvre le plus de surface gagne.
+une arène en rebondissant, ramassent des objets, et la couleur qui couvre le plus de surface gagne.
+
+| Objet | Effet |
+|---|---|
+| Fusil | Tire une balle de peinture sur l'adversaire le plus proche : touché, il est assommé 5 s |
+| Gros pinceau | Coup circulaire qui peint une large zone et repousse/ralentit les cubes touchés |
+| Potion | Le cube grandit (x2) pendant 5 s |
+| Sablier | +3 s au chrono (3 max par partie) |
+| Bombe | Posée au sol, clignote 1,5 s puis explose : grosse éclaboussure, cubes proches projetés, écran qui tremble |
+| Rouleau | Pendant 5 s, la traînée du cube devient presque 3 fois plus large |
+| Seau arc-en-ciel | Une vague de peinture traverse toute l'arène, dans la direction où elle recouvre le plus de peinture adverse |
+| Glace | Gèle tous les adversaires 2 s |
+| Aimant | Attire tous les objets vers le cube pendant 4 s |
 
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
@@ -78,6 +89,11 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 | `hourglass_bonus` | 3 | Secondes ajoutées par sablier |
 | `aim_duration` | 0.3 | Durée de la ligne de visée du fusil |
 | `stun_duration` / `slow_duration` / `potion_duration` | 5 / 3 / 5 | Durées des effets |
+| `bomb_fuse` / `bomb_radius` | 1.5 / 18 | Délai et rayon de l'explosion de la bombe |
+| `roller_duration` / `roller_width` | 5 / 2.8 | Durée du rouleau et largeur de la traînée (x la taille du cube) |
+| `bucket_width` | 1.6 | Épaisseur de la vague du seau (x la taille du cube) |
+| `ice_duration` | 2 | Durée du gel |
+| `magnet_duration` / `magnet_speed` | 4 / 70 | Durée de l'aimant et vitesse d'attraction des objets |
 | `cube_speed` / `bullet_speed` | 42 / 110 | Vitesses en pixels logiques par seconde |
 | `brush_radius` | 26 | Rayon du coup de gros pinceau |
 | `paint_sound` | false | Léger souffle continu pendant la peinture |

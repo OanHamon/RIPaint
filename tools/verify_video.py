@@ -77,8 +77,11 @@ def decode_full_frame(path: Path, t: float) -> np.ndarray:
 def expected_frames(meta: dict) -> tuple[int, int]:
     """Re-simule la partie à partir de la seed et des réglages enregistrés dans le MP4."""
     from game.battle import Battle
-    from game.settings import Settings
-    b = Battle(int(meta["seed"]), Settings.from_dict(meta["settings"]))
+    from game.settings import ITEM_KINDS, Settings
+    data = dict(meta["settings"])
+    for kind in ITEM_KINDS:   # vidéo d'une version antérieure : objets inexistants à l'époque
+        data.setdefault(f"prob_{kind}", 0)
+    b = Battle(int(meta["seed"]), Settings.from_dict(data))
     while not b.done:
         b.step()
     return b.total_frames, b.hourglasses_taken

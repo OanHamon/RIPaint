@@ -67,7 +67,10 @@ class Renderer:
         b = self.b
         surf.blit(self.background, (0, 0))
         self._arena(surf)
+        self._waves(surf)
+        self._magnet_lines(surf)
         self._items(surf)
+        self._bombs(surf)
         self._swipes(surf)
         self._aims(surf)
         self._bullets(surf)
@@ -85,6 +88,9 @@ class Renderer:
         if b.phase == "outro":
             self._outro(surf)
         self._particles(surf, 1)
+        if b.shake > 0:
+            dx, dy = ((1, 0), (-1, 1), (0, -1), (1, 1), (-1, 0), (0, 1))[b.frame % 6]
+            surf.scroll(dx, dy)
         if show_safe_zone:
             self._safe_zone(surf)
 
@@ -103,17 +109,73 @@ class Renderer:
         for it in b.items:
             age = b.frame - it.spawn_frame
             img = art.item_sprite(it.kind)
-            x = L.arena_x + it.x - img.get_width() // 2
-            y = L.arena_y + it.y - img.get_height() // 2
+            ix, iy = int(round(it.x)), int(round(it.y))
+            x = L.arena_x + ix - img.get_width() // 2
+            y = L.arena_y + iy - img.get_height() // 2
             if age < SPAWN_ANIM:
                 r = 2 + age // 3
                 if r < 12:
-                    pygame.draw.rect(surf, palette.WHITE, (L.arena_x + it.x - r, L.arena_y + it.y - r, 2 * r + 1, 2 * r + 1), 1)
+                    pygame.draw.rect(surf, palette.WHITE, (L.arena_x + ix - r, L.arena_y + iy - r, 2 * r + 1, 2 * r + 1), 1)
                 if (age // 3) % 2 == 0:
                     surf.blit(img, (x, y))
             else:
                 bob = 1 if (age // 20) % 2 else 0
                 surf.blit(img, (x, y - bob))
+
+    def _waves(self, surf):
+        b, L = self.b, self.L
+        rainbow = (palette.RED, palette.ORANGE, palette.YELLOW, palette.GREEN, palette.BLUE, palette.PURPLE)
+        for w in b.waves:
+            length = b.W if w.horizontal else b.H
+            a0, a1 = int(w.band - w.half), int(w.band + w.half) + 1
+            for front in (w.origin - w.dist, w.origin + w.dist):
+                f = int(front)
+                for k in range(-1, 2):
+                    pos = f + k
+                    if not 0 <= pos < length:
+                        continue
+                    for i, across in enumerate(range(max(0, a0 - 1), a1 + 1)):
+                        color = rainbow[(i + b.frame + k) % len(rainbow)]
+                        if w.horizontal and across < b.H:
+                            surf.set_at((L.arena_x + pos, L.arena_y + across), color)
+                        elif not w.horizontal and across < b.W:
+                            surf.set_at((L.arena_x + across, L.arena_y + pos), color)
+
+    def _magnet_lines(self, surf):
+        b, L = self.b, self.L
+        holders = [c for c in b.cubes if c.magnet > 0]
+        if not holders or b.phase != "battle":
+            return
+        for it in b.items:
+            h = min(holders, key=lambda c: ((c.cx - it.x) ** 2 + (c.cy - it.y) ** 2, c.idx))
+            dist = max(1, int(math.hypot(h.cx - it.x, h.cy - it.y)))
+            for i in range(0, dist, 3):
+                if (i // 3 + b.frame // 4) % 2:
+                    continue
+                x = L.arena_x + it.x + (h.cx - it.x) * i / dist
+                y = L.arena_y + it.y + (h.cy - it.y) * i / dist
+                surf.set_at((int(x), int(y)), palette.RED if (i // 3) % 2 else palette.GREY_LIGHT)
+
+    def _bombs(self, surf):
+        b, L = self.b, self.L
+        for bomb in b.bombs:
+            cx, cy = L.arena_x + int(bomb.x), L.arena_y + int(bomb.y)
+            radius = b.settings.bomb_radius * b.cubes[bomb.owner].base_size / 11
+            period = 3 if bomb.frames_left < 30 else 8
+            hot = (bomb.frames_left // period) % 2 == 0
+            # zone de souffle en pointillés
+            if hot:
+                steps = max(12, int(radius * 2 * math.pi / 3))
+                for k in range(steps):
+                    a = k * 2 * math.pi / steps + b.frame * 0.05
+                    px, py = int(cx + math.cos(a) * radius), int(cy + math.sin(a) * radius)
+                    if L.arena_x <= px < L.arena_x + b.W and L.arena_y <= py < L.arena_y + b.H:
+                        surf.set_at((px, py), palette.RED)
+            img = art.item_sprite("bomb")
+            surf.blit(img, (cx - img.get_width() // 2, cy - img.get_height() // 2))
+            if hot:
+                pygame.draw.rect(surf, palette.WHITE, (cx - 2, cy - 1, 2, 2))
+                surf.set_at((cx + 2, cy - 4), palette.YELLOW_LIGHT)
 
     def _swipes(self, surf):
         b, L = self.b, self.L
@@ -183,7 +245,8 @@ class Renderer:
             moving = b.phase == "battle" and c.active
             look = (c.dx, c.dy) if moving else (0.0, 0.0)
             flash = c.stun > 0 and c.stun > round(b.settings.stun_duration * FPS) - 8
-            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash)
+            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash,
+                          frozen=c.frozen > 0)
             if c.big and (b.frame // 6) % 2 == 0:
                 pygame.draw.rect(surf, palette.MAGENTA, (x - 1, y - 1, c.size + 2, c.size + 2), 1)
             top_y = y - 1
@@ -199,6 +262,14 @@ class Renderer:
                 icon = art.slow_icon()
                 surf.blit(icon, (x + c.size // 2 - 2, top_y - 4))
                 top_y -= 5
+            if c.roller > 0 and (c.roller > 60 or (b.frame // 6) % 2 == 0):
+                icon = art.roller_icon()
+                surf.blit(icon, (x + c.size // 2 - 2, top_y - 4))
+                top_y -= 5
+            if c.magnet > 0 and (c.magnet > 60 or (b.frame // 6) % 2 == 0):
+                icon = art.magnet_icon()
+                surf.blit(icon, (x + c.size // 2 - 1, top_y - 3))
+                top_y -= 4
             if leader == c.idx:
                 cr = art.crown()
                 surf.blit(cr, (x + c.size // 2 - 2, top_y - 3))

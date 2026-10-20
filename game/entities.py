@@ -16,6 +16,9 @@ class Cube:
     stun: int = 0            # images restantes d'étourdissement
     slow: int = 0            # images restantes de ralentissement
     potion: int = 0          # images restantes de potion
+    frozen: int = 0          # images restantes de gel (objet Glace)
+    roller: int = 0          # images restantes de rouleau
+    magnet: int = 0          # images restantes d'aimant
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0
@@ -41,21 +44,27 @@ class Cube:
         return x0, y0, x0 + self.size, y0 + self.size
 
     @property
+    def immobile(self) -> bool:
+        """Assommé ou gelé : ne bouge plus, ne peint plus, ne ramasse plus."""
+        return self.stun > 0 or self.frozen > 0
+
+    @property
     def active(self) -> bool:
-        return self.stun <= 0
+        return not self.immobile
 
 
 @dataclass
 class Item:
     kind: str
-    x: int                   # centre
-    y: int
+    x: float                 # centre (flottant : l'aimant peut déplacer l'objet)
+    y: float
     spawn_frame: int
     size: int = 9
 
     def rect(self):
         h = self.size // 2
-        return self.x - h, self.y - h, self.x - h + self.size, self.y - h + self.size
+        x0, y0 = int(round(self.x)) - h, int(round(self.y)) - h
+        return x0, y0, x0 + self.size, y0 + self.size
 
 
 @dataclass
@@ -85,6 +94,26 @@ class Swipe:
     duration: int = 14
     hit: set = field(default_factory=set)
     painted_upto: float = 0.0
+
+
+@dataclass
+class Bomb:
+    owner: int
+    x: float
+    y: float
+    frames_left: int
+    total: int
+    next_tick: int = 0
+
+
+@dataclass
+class Wave:
+    owner: int
+    horizontal: bool         # True : la vague parcourt une bande horizontale (de gauche à droite)
+    band: float              # coordonnée du centre de la bande (y si horizontale, x sinon)
+    origin: float            # point de départ le long de la bande
+    half: float              # demi-épaisseur
+    dist: float = 0.0        # distance parcourue de chaque côté
 
 
 @dataclass

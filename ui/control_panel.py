@@ -61,7 +61,7 @@ class ControlPanel:
 
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
-        box.grid(row=1, column=0, sticky="ew", **pad)
+        box.grid(row=0, column=1, rowspan=9, sticky="new", **pad)
         self.prob_vars, self.pct_labels = {}, {}
         for r, kind in enumerate(ITEM_KINDS):
             var = tk.DoubleVar(value=getattr(self.s, f"prob_{kind}"))

@@ -9,8 +9,11 @@ CONFIG_PATH = ROOT / "config.json"
 
 CONFIG_VERSION = 2
 
-ITEM_KINDS = ["gun", "brush", "potion", "hourglass"]
-ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hourglass": "Sablier"}
+# Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
+ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet"]
+ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hourglass": "Sablier",
+               "bomb": "Bombe", "roller": "Rouleau", "bucket": "Seau arc-en-ciel", "ice": "Glace",
+               "magnet": "Aimant"}
 
 DEFAULT_HOOKS = [
     "CHOISIS TA COULEUR !",
@@ -30,6 +33,11 @@ class Settings:
     prob_brush: float = 25
     prob_potion: float = 25
     prob_hourglass: float = 25
+    prob_bomb: float = 20
+    prob_roller: float = 20
+    prob_bucket: float = 20
+    prob_ice: float = 20
+    prob_magnet: float = 20
     item_interval: float = 5.0        # secondes entre deux apparitions
     max_items: int = 3                # objets présents simultanément
     max_hourglasses: int = 3          # sabliers par partie
@@ -44,6 +52,14 @@ class Settings:
     slow_factor: float = 0.45
     potion_duration: float = 5.0
     potion_scale: int = 2
+    bomb_fuse: float = 1.5            # secondes avant l'explosion
+    bomb_radius: int = 18
+    roller_duration: float = 5.0
+    roller_width: float = 2.8         # largeur de la traînée (x la taille du cube)
+    bucket_width: float = 1.6         # épaisseur de la vague (x la taille du cube)
+    ice_duration: float = 2.0
+    magnet_duration: float = 4.0
+    magnet_speed: float = 70.0        # px logiques / s
 
     # Partie
     intro_duration: float = 5.0

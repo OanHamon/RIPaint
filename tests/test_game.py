@@ -8,7 +8,7 @@ from engine8bit.display import FPS
 from game.battle import Battle, compute_result
 from game.entities import Cube
 from game.render import Renderer
-from game.settings import Settings
+from game.settings import ITEM_KINDS, Settings
 
 
 def run(seed, settings=None, frames=None, check=None):
@@ -22,7 +22,7 @@ def run(seed, settings=None, frames=None, check=None):
 
 def only(kind, **kw):
     s = Settings(**kw)
-    for k in ("gun", "brush", "potion", "hourglass"):
+    for k in ITEM_KINDS:
         setattr(s, f"prob_{k}", 100 if k == kind else 0)
     return s
 
@@ -74,14 +74,14 @@ def test_cubes_stay_inside_and_never_stuck(seed):
             if c.idx in window:
                 start, far, was_stunned = window[c.idx]
                 window[c.idx] = (start, max(far, math.hypot(c.cx - start[0], c.cy - start[1])),
-                                 was_stunned or c.stun > 0)
+                                 was_stunned or c.immobile)
         if (b.frame - b.battle_start) % 60 == 0:
             for c in b.cubes:
                 if c.idx in window:
                     _, far, was_stunned = window[c.idx]
                     if not was_stunned:
                         assert far > 8, "cube bloqué"
-                window[c.idx] = ((c.cx, c.cy), 0.0, c.stun > 0)
+                window[c.idx] = ((c.cx, c.cy), 0.0, c.immobile)
 
     run(seed, check=check)
 
@@ -100,7 +100,7 @@ def test_hourglass_cap_and_duration():
 
 
 def test_zero_probabilities_no_items():
-    s = Settings(prob_gun=0, prob_brush=0, prob_potion=0, prob_hourglass=0)
+    s = Settings(**{f"prob_{k}": 0 for k in ITEM_KINDS})
     b = run(11, s)
     assert not any(e.name == "spawn" for e in b.events)
 
@@ -238,3 +238,114 @@ def test_players_random_keeps_seed_meaning():
         a = Battle(seed, Settings(players=0))
         b = Battle(seed, Settings(players=len(a.cubes)))
         assert [(c.team, c.cx, c.cy) for c in a.cubes] == [(c.team, c.cx, c.cy) for c in b.cubes]
+
+
+
+# ---- Nouveaux objets -------------------------------------------------------------------
+
+def _setup(kind, seed=50):
+    from game.entities import Item
+    s = only(kind)
+    b = Battle(seed, s)
+    b.frame = b.battle_start
+    cube = b.cubes[0]
+    return b, s, cube, Item(kind, cube.cx, cube.cy, 0)
+
+
+def test_bomb_explodes_after_fuse_and_pushes():
+    from game import items
+    b, s, cube, item = _setup("bomb")
+    other = b.cubes[1]
+    cube.cx, cube.cy = b.W / 2, b.H / 2
+    other.cx, other.cy = b.W / 2 + 10, b.H / 2
+    item.x, item.y = cube.cx, cube.cy
+    items.pickup(b, cube, item)
+    fuse = round(s.bomb_fuse * FPS)
+    for _ in range(fuse - 1):
+        items.update_bombs(b)
+    assert b.bombs and not any(e.name == "explosion" for e in b.events)
+    items.update_bombs(b)
+    assert not b.bombs and any(e.name == "explosion" for e in b.events)
+    assert int((b.grid == cube.idx).sum()) > 0.8 * math.pi * s.bomb_radius ** 2
+    assert other.kb_x > 100 and b.shake > 0
+    assert sum(e.name == "bomb_tick" for e in b.events) >= 4
+
+
+def test_roller_paints_wider_trail():
+    def painted(roller):
+        b = Battle(60, only("gun", item_interval=999))
+        while b.frame < b.battle_start:
+            b.step()
+        if roller:
+            b.cubes[0].roller = 10 ** 6
+        for _ in range(120):
+            b.step()
+        return int((b.grid == 0).sum())
+    assert painted(True) > 1.8 * painted(False)
+
+
+def test_bucket_wave_crosses_whole_arena():
+    from game import items
+    b, s, cube, item = _setup("bucket")
+    items.pickup(b, cube, item)
+    w = b.waves[0]
+    for _ in range(200):
+        items.update_waves(b)
+    assert not b.waves
+    a0, a1 = int(w.band - w.half), int(w.band + w.half) + 1
+    band = b.grid[a0:a1, :] if w.horizontal else b.grid[:, a0:a1]
+    assert (band == cube.idx).all()
+
+
+def test_bucket_chooses_direction_with_most_enemy_paint():
+    from game import items
+    b, s, cube, item = _setup("bucket")
+    cube.cx, cube.cy = b.W / 2, b.H / 2
+    b.grid[:, :] = cube.idx
+    b.grid[int(cube.cy) - 3:int(cube.cy) + 4, :] = 1      # bande horizontale adverse
+    items.pickup(b, cube, item)
+    assert b.waves[0].horizontal
+
+
+def test_ice_freezes_opponents_then_thaws():
+    b = Battle(70, only("gun", item_interval=999))
+    while b.frame < b.battle_start + 30:
+        b.step()
+    from game import items
+    from game.entities import Item
+    owner = b.cubes[0]
+    items.pickup(b, owner, Item("ice", owner.cx, owner.cy, 0))
+    frozen_pos = {c.idx: (c.cx, c.cy) for c in b.cubes[1:]}
+    frames = round(b.settings.ice_duration * FPS)
+    for _ in range(frames - 2):
+        b.step()
+    for c in b.cubes[1:]:
+        assert c.frozen > 0 and (c.cx, c.cy) == frozen_pos[c.idx]
+    assert owner.frozen == 0
+    for _ in range(4):
+        b.step()
+    assert all(c.frozen == 0 for c in b.cubes)
+    assert any(e.name == "thaw" for e in b.events)
+
+
+def test_magnet_attracts_items():
+    from game import items
+    from game.entities import Item
+    b, s, cube, item = _setup("magnet")
+    items.pickup(b, cube, item)
+    far = Item("gun", 10, 10, -100)
+    b.items.append(far)
+    start = math.hypot(far.x - cube.cx, far.y - cube.cy)
+    for _ in range(30):
+        items.update_magnets(b)
+    assert math.hypot(far.x - cube.cx, far.y - cube.cy) < start - 25
+
+
+@pytest.mark.parametrize("kind", ["bomb", "roller", "bucket", "ice", "magnet"])
+def test_full_game_with_each_new_item(kind):
+    s = only(kind, item_interval=2.0, max_items=4)
+    b = run(80, s)
+    names = [e.name for e in b.events]
+    assert f"pickup_{kind}" in names
+    r = Renderer(b)
+    r.draw(pygame.Surface((135, 240)))

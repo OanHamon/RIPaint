@@ -1,4 +1,5 @@
-"""Objets : apparition, ramassage et effets (Fusil, Gros pinceau, Potion, Sablier)."""
+"""Objets : apparition, ramassage et effets (Fusil, Gros pinceau, Potion, Sablier, Bombe,
+Rouleau, Seau arc-en-ciel, Glace, Aimant)."""
 
 from __future__ import annotations
 
@@ -8,7 +9,7 @@ from typing import TYPE_CHECKING
 from engine8bit import palette
 
 from . import physics
-from .entities import Aim, Bullet, Cube, Item, Swipe
+from .entities import Aim, Bomb, Bullet, Cube, Item, Swipe, Wave
 from .settings import ITEM_KINDS
 
 if TYPE_CHECKING:
@@ -16,7 +17,10 @@ if TYPE_CHECKING:
 
 SPAWN_ANIM = 36            # images de clignotement avant de pouvoir être ramassé
 WALL_MARGIN = 9            # distance minimale au mur (centre de l'objet)
-ITEM_NAMES = {"gun": "FUSIL", "brush": "PINCEAU", "potion": "POTION", "hourglass": "SABLIER"}
+ITEM_NAMES = {"gun": "FUSIL", "brush": "PINCEAU", "potion": "POTION", "hourglass": "SABLIER",
+              "bomb": "BOMBE", "roller": "ROULEAU", "bucket": "SEAU", "ice": "GLACE", "magnet": "AIMANT"}
+BOMB_KNOCKBACK = 190.0
+WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
 RESIZE_FRAMES = 24
 
@@ -122,6 +126,26 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
         b.bonus_anims.append(b.frame)
         b.emit("time_plus")
         b.subtitle(b.frame, b.frame + 60, f"+{s.hourglass_bonus:g}S")
+    elif item.kind == "bomb":
+        frames = max(1, round(s.bomb_fuse * 60))
+        b.bombs.append(Bomb(cube.idx, item.x, item.y, frames, frames))
+        b.emit("bomb_drop")
+    elif item.kind == "roller":
+        cube.roller = round(s.roller_duration * 60)
+    elif item.kind == "bucket":
+        start_wave(b, cube)
+        b.emit("wave")
+    elif item.kind == "ice":
+        frames = round(s.ice_duration * 60)
+        for c in b.cubes:
+            if c.idx != cube.idx:
+                c.frozen = frames
+                c.kb_x = c.kb_y = 0.0
+                b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.SKY, 10)
+        b.emit("freeze")
+    elif item.kind == "magnet":
+        cube.magnet = round(s.magnet_duration * 60)
+        b.emit("magnet")
 
 
 def start_resize(cube: Cube, new_size: int) -> None:
@@ -237,3 +261,108 @@ def update_swipes(b: "Battle") -> None:
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.TEAMS[owner.team][1], 8)
         if sw.frame >= sw.duration:
             b.swipes.remove(sw)
+
+
+# ---- Bombe -----------------------------------------------------------------------------
+
+def update_bombs(b: "Battle") -> None:
+    s = b.settings
+    for bomb in list(b.bombs):
+        bomb.frames_left -= 1
+        elapsed = bomb.total - bomb.frames_left
+        if bomb.frames_left > 0:
+            if elapsed >= bomb.next_tick:
+                b.emit("bomb_tick")
+                bomb.next_tick = elapsed + max(5, bomb.frames_left // 4)
+            continue
+        b.bombs.remove(bomb)
+        radius = s.bomb_radius * b.cubes[bomb.owner].base_size / 11
+        b.splat(bomb.x, bomb.y, bomb.owner, radius)
+        for c in b.cubes:
+            if c.idx == bomb.owner:
+                continue
+            vx, vy = c.cx - bomb.x, c.cy - bomb.y
+            dist = math.hypot(vx, vy)
+            if dist <= radius + c.half:
+                if dist > 1e-6:
+                    kx, ky = vx / dist, vy / dist
+                else:
+                    a = b.rng.uniform(0, 2 * math.pi)
+                    kx, ky = math.cos(a), math.sin(a)
+                c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
+        ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
+        b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
+        b.sparkle(ax, ay, palette.WHITE, 10)
+        b.shake = 12
+        b.emit("explosion")
+
+
+# ---- Rouleau / Glace / Aimant (minuteurs par cube) ---------------------------------------
+
+def update_cube_timers(b: "Battle", cube: Cube) -> None:
+    if cube.roller > 0:
+        cube.roller -= 1
+        if cube.roller == 0:
+            b.emit("roller_end")
+    if cube.frozen > 0:
+        cube.frozen -= 1
+        if cube.frozen == 0:
+            b.emit("thaw")
+            b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 8)
+    if cube.magnet > 0:
+        cube.magnet -= 1
+
+
+def paint_size(b: "Battle", cube: Cube) -> float:
+    """Rayon de la traînée d'un cube qui a le rouleau."""
+    return cube.size * b.settings.roller_width / 2
+
+
+def update_magnets(b: "Battle") -> None:
+    holders = [c for c in b.cubes if c.magnet > 0]
+    if not holders:
+        return
+    step = b.settings.magnet_speed / 60
+    for item in b.items:
+        h = min(holders, key=lambda c: ((c.cx - item.x) ** 2 + (c.cy - item.y) ** 2, c.idx))
+        vx, vy = h.cx - item.x, h.cy - item.y
+        dist = math.hypot(vx, vy)
+        if dist <= step:
+            item.x, item.y = h.cx, h.cy
+        elif dist > 0:
+            item.x += vx / dist * step
+            item.y += vy / dist * step
+
+
+# ---- Seau arc-en-ciel ------------------------------------------------------------------
+
+def start_wave(b: "Battle", cube: Cube) -> None:
+    """La vague part du cube et traverse l'arène dans la direction (horizontale ou verticale)
+    où elle recouvre le plus de peinture adverse."""
+    half = max(2.0, cube.base_size * b.settings.bucket_width / 2)
+    g = b.grid
+    rows = g[max(0, int(cube.cy - half)):int(cube.cy + half) + 1, :]
+    cols = g[:, max(0, int(cube.cx - half)):int(cube.cx + half) + 1]
+    gain_h = int(((rows >= 0) & (rows != cube.idx)).sum() + (rows < 0).sum() // 2)
+    gain_v = int(((cols >= 0) & (cols != cube.idx)).sum() + (cols < 0).sum() // 2)
+    horizontal = gain_h >= gain_v
+    if horizontal:
+        b.waves.append(Wave(cube.idx, True, cube.cy, cube.cx, half))
+    else:
+        b.waves.append(Wave(cube.idx, False, cube.cx, cube.cy, half))
+
+
+def update_waves(b: "Battle") -> None:
+    for w in list(b.waves):
+        length = b.W if w.horizontal else b.H
+        d0, d1 = w.dist, w.dist + WAVE_SPEED
+        w.dist = d1
+        a0, a1 = int(w.band - w.half), int(w.band + w.half) + 1
+        for lo, hi in ((w.origin - d1, w.origin - d0), (w.origin + d0, w.origin + d1)):
+            lo_i, hi_i = int(math.floor(lo)), int(math.ceil(hi))
+            if w.horizontal:
+                physics.paint_rect(b.grid, lo_i, a0, hi_i, a1, w.owner)
+            else:
+                physics.paint_rect(b.grid, a0, lo_i, a1, hi_i, w.owner)
+        if w.origin - d1 <= 0 and w.origin + d1 >= length:
+            b.waves.remove(w)
