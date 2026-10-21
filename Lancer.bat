@@ -1,6 +1,8 @@
 @echo off
-rem Lance le panneau de controle (installe les dependances au premier lancement).
+rem Lance RIPaint dans le terminal (installe les dependances au premier lancement).
 cd /d "%~dp0"
+title RIPaint
+chcp 65001 >nul
 
 where python >nul 2>nul
 if errorlevel 1 (
@@ -10,7 +12,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-python -c "import pygame, numpy, imageio_ffmpeg" >nul 2>nul
+python -c "import pygame, numpy, imageio_ffmpeg, textual" >nul 2>nul
 if errorlevel 1 (
     echo Installation des dependances, patientez...
     python -m pip install -r requirements.txt
@@ -21,9 +23,5 @@ if errorlevel 1 (
     )
 )
 
-where pythonw >nul 2>nul
-if errorlevel 1 (
-    python main.py
-) else (
-    start "" pythonw main.py
-)
+python main.py
+if errorlevel 1 pause
