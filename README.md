@@ -15,6 +15,7 @@ une arène en rebondissant, ramassent des objets, et la couleur qui couvre le pl
 | Glace | Gèle tous les adversaires 2 s |
 | Aimant | Attire tous les objets vers le cube pendant 4 s |
 | Bottes | Le cube va 1,8 fois plus vite pendant 5 s (traînée de fantômes) |
+| Cœur | +1 vie au cube qui le ramasse (jusqu'à 2 vies de plus qu'au départ) ; n'apparaît pas si les vies sont désactivées |
 
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
@@ -69,7 +70,7 @@ La souris fonctionne aussi : clic ou glisser sur les curseurs, clic sur `◀` `�
 |---|---|
 | Nombre de joueurs | « Aléatoire (2 à 4) » ou 2, 3, 4 cubes fixes. |
 | Taille des cubes | En pixels logiques (13 par défaut ; 5 à 16). Plus gros = plus de chocs et d'interactions. |
-| Vies par cube | 3 petits points sous chaque cube (0 = désactivé, jusqu'à 5). Chaque objet adverse qui touche un cube (balle, pinceau, bombe, glace, vague) lui retire une vie, avec 0,75 s d'invulnérabilité ensuite. À 0 : K.O., yeux en croix, il glisse en ralentissant puis ne peint plus. La glace, qui touche tous les adversaires d'un coup, ne peut pas achever un cube. |
+| Vies par cube | 3 petits points sous chaque cube (0 = désactivé, jusqu'à 5). Chaque objet adverse qui touche un cube (balle, pinceau, bombe, glace, vague) lui retire une vie, avec 0,75 s d'invulnérabilité ensuite. À 0 : K.O., yeux en croix, il se grise et rapetisse, glisse en ralentissant puis ne peint plus. Les cœurs redonnent une vie. La glace, qui touche tous les adversaires d'un coup, ne peut pas achever un cube. |
 | Carte | « Aléatoire (toutes) » : une des 9 cartes dessinées (OPEN, PILLARS, CROSS, TEETH, CORRIDOR, DIAMOND, ZIGZAG, RING, S-WALLS), orientée au hasard ; ou une carte précise ; ou « Obstacles au hasard ». Le nom s'affiche pendant le compte à rebours. |
 | Mode escalade | Plus la partie avance, plus c'est la guerre : un objet toutes les 5 s au début puis toutes les ~1,4 s, jusqu'à 6 objets en même temps, cubes et balles qui accélèrent, et des coups de plus en plus marqués (slashs blancs/noirs, images d'impact façon manga, secousses). Environ 56 % des parties ont au moins un K.O. (25 % sans). |
 | Obstacles (mode « au hasard ») | 0 à 4 petits blocs de pierre disposés en miroir (3 par défaut). Les cubes rebondissent dessus, les balles s'y écrasent, la peinture ne les recouvre pas et ils ne comptent pas dans le score. |
@@ -143,6 +144,8 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `players` | 0 | Nombre de cubes : 0 = aléatoire (2 à 4), sinon 2, 3 ou 4 |
 | `cube_size` | 13 | Taille des cubes en pixels logiques (x2 avec la potion) |
 | `lives` | 3 | Vies par cube (0 = illimitées) |
+| `max_bonus_lives` | 2 | Vies gagnées avec les cœurs au-delà du départ |
+| `death_shrink` | true | Un cube K.O. se grise et rapetisse |
 | `arena_centered` | true | Arène centrée sur l'écran (false = ancienne mise en page, décalée à gauche) |
 | `map` | random | `random`, un nom de carte (ex. `CROSS`) ou `generated` (obstacles au hasard) |
 | `escalation` | true | Mode escalade |

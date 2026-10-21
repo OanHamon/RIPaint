@@ -88,6 +88,7 @@ def expected_frames(meta: dict) -> tuple[int, int]:
     data.setdefault("obstacles", 0)        # pas d'obstacles avant cette option
     data.setdefault("map", "generated")    # avant les cartes : obstacles placés au hasard
     data.setdefault("escalation", False)   # avant le mode escalade
+    data.setdefault("death_shrink", False) # avant les cubes K.O. qui rapetissent
     data.setdefault("arena_centered", False)   # ancienne mise en page (arène dans la zone sûre)
     data.setdefault("lives", 0)                # pas de vies avant cette option
     for key, legacy in (("teaser", False), ("tiktok_rewards", False), ("comeback", 0.0), ("slowmo", False),

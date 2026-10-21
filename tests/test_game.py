@@ -612,3 +612,60 @@ def test_ice_cannot_finish_off_a_cube():
     v.lives = 1
     items.pickup(b, a, Item("ice", a.cx, a.cy, 0))
     assert v.lives == 1 and not v.dead and v.frozen > 0
+
+
+
+# ---- Cœur et cube K.O. qui rapetisse --------------------------------------------------------
+
+def test_heart_gives_one_life_with_a_cap():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    v.lives = 2
+    items.pickup(b, v, Item("heart", v.cx, v.cy, 0))
+    assert v.lives == 3 and v.life_gained > 0
+    assert any(e.name == "pickup_heart" for e in b.events)
+    assert any(t.endswith("+1 LIFE!") for _, _, t in b.subtitles)
+    for _ in range(5):
+        items.pickup(b, v, Item("heart", v.cx, v.cy, 0))
+    assert v.lives == 3 + b.settings.max_bonus_lives          # plafond : 2 vies bonus
+
+
+def test_no_hearts_without_lives():
+    b = run(140, only("heart", item_interval=1.0, lives=0))
+    assert not any(e.name == "spawn" for e in b.events)
+
+
+def test_dead_cube_greys_and_shrinks():
+    from game import items
+    b, a, v = _two_cubes()
+    size0 = v.size
+    v.lives = 1
+    items.damage(b, v)
+    assert v.dead
+    for _ in range(60):
+        b.step()
+    assert v.size == round(size0 * items.DEATH_SCALE)
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    r.draw(surf)
+    x0, y0, x1, y1 = v.rect()
+    px = surf.get_at((b.layout.arena_x + x0 + 2, b.layout.arena_y + y1 - 3))[:3]
+    from engine8bit import palette
+    assert px in (palette.GREY, palette.GREY_LIGHT, palette.GREY_DARK, palette.BLACK)
+
+
+def test_dead_big_cube_shrinks_from_potion_size():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    items.pickup(b, v, Item("potion", v.cx, v.cy, 0))
+    for _ in range(30):
+        b.step()
+    assert v.big and v.size == 2 * v.base_size
+    v.lives = 1
+    v.invuln = 0
+    items.damage(b, v)
+    for _ in range(60):
+        b.step()
+    assert v.dead and not v.big and v.size == round(2 * v.base_size * items.DEATH_SCALE)

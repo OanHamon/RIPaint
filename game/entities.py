@@ -25,6 +25,9 @@ class Cube:
     dead: bool = False       # K.O. : glisse en ralentissant, ne peint plus, ne ramasse plus
     invuln: int = 0          # images d'invulnérabilité après avoir perdu une vie
     life_lost: int = 0       # images restantes du clignotement de la vie perdue
+    life_gained: int = 0     # images restantes du clignotement de la vie gagnée (cœur)
+    death_anim: int = 0      # images écoulées depuis le K.O. (grisé + rapetissement)
+    death_from: int = 0      # taille au moment du K.O.
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0

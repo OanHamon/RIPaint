@@ -36,7 +36,7 @@ TEAMS = {
 ITEM_COLORS = {
     "gun": GREY_LIGHT, "brush": MAGENTA, "potion": "#9878f8", "hourglass": YELLOW_LIGHT,
     "bomb": ORANGE, "roller": RED_LIGHT, "bucket": GREEN_LIGHT, "ice": SKY, "magnet": RED,
-    "boots": YELLOW_DARK,
+    "boots": YELLOW_DARK, "heart": RED,
 }
 
 SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"

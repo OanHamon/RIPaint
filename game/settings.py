@@ -10,10 +10,11 @@ CONFIG_PATH = ROOT / "config.json"
 CONFIG_VERSION = 6
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
-ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots"]
+ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots",
+              "heart"]
 ITEM_LABELS = {"gun": "Fusil", "brush": "Gros pinceau", "potion": "Potion", "hourglass": "Sablier",
                "bomb": "Bombe", "roller": "Rouleau", "bucket": "Seau arc-en-ciel", "ice": "Glace",
-               "magnet": "Aimant", "boots": "Bottes"}
+               "magnet": "Aimant", "boots": "Bottes", "heart": "Cœur (+1 vie)"}
 
 # Phrases d'accroche affichées dans la vidéo (en anglais)
 DEFAULT_HOOKS = [
@@ -49,6 +50,7 @@ class Settings:
     prob_ice: float = 20
     prob_magnet: float = 20
     prob_boots: float = 20
+    prob_heart: float = 15
     item_interval: float = 5.0        # secondes entre deux apparitions
     max_items: int = 3                # objets présents simultanément
     max_hourglasses: int = 3          # sabliers par partie
@@ -93,6 +95,8 @@ class Settings:
     cube_size: int = 13
     arena_centered: bool = True       # arène centrée sur l'écran (False = ancienne mise en page)
     lives: int = 3                    # vies par cube (0 = illimitées)
+    max_bonus_lives: int = 2          # vies gagnées avec les cœurs au-delà du départ
+    death_shrink: bool = True         # un cube K.O. se grise et rapetisse
     map: str = "random"               # « random », un nom de carte, ou « generated » (obstacles au hasard)
     escalation: bool = True           # plus le temps passe, plus c'est la guerre (objets, vitesse, effets)
     obstacles: int = 3                # petits blocs fixes dans l'arène (0 = aucun)

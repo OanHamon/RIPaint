@@ -20,7 +20,9 @@ WALL_MARGIN = 9            # distance minimale au mur (centre de l'objet)
 # Textes affichés dans la vidéo (en anglais)
 ITEM_NAMES = {"gun": "GUN", "brush": "BRUSH", "potion": "POTION", "hourglass": "TIMER",
               "bomb": "BOMB", "roller": "ROLLER", "bucket": "RAINBOW", "ice": "ICE", "magnet": "MAGNET",
-              "boots": "BOOTS"}
+              "boots": "BOOTS", "heart": "+1 LIFE"}
+DEATH_SHRINK = 30          # durée du rapetissement d'un cube K.O.
+DEATH_SCALE = 0.6          # taille finale d'un cube K.O. (60 %)
 BOMB_KNOCKBACK = 190.0
 WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
@@ -45,6 +47,8 @@ def try_spawn(b: "Battle") -> None:
     weights = s.item_weights()
     if b.hourglasses_spawned >= s.max_hourglasses:
         weights["hourglass"] = 0.0
+    if s.lives <= 0:
+        weights["heart"] = 0.0                       # pas de vies : pas de cœurs
     if sum(weights.values()) <= 0:
         return
     kind = b.rng.choices(ITEM_KINDS, weights=[weights[k] for k in ITEM_KINDS])[0]
@@ -168,6 +172,11 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
         b.emit("magnet")
     elif item.kind == "boots":
         cube.boots = round(s.boots_duration * 60)
+    elif item.kind == "heart":
+        if s.lives > 0 and cube.lives < s.lives + s.max_bonus_lives:
+            cube.lives += 1
+            cube.life_gained = 50
+        b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy - cube.half, palette.RED_LIGHT, 10)
 
 
 def start_resize(cube: Cube, new_size: int) -> None:
@@ -177,6 +186,8 @@ def start_resize(cube: Cube, new_size: int) -> None:
 
 
 def update_resize(b: "Battle", cube: Cube) -> None:
+    if cube.dead and b.settings.death_shrink:
+        return
     if cube.potion > 0:
         cube.potion -= 1
         if cube.potion == 0 and cube.big:
@@ -359,6 +370,14 @@ def update_cube_timers(b: "Battle", cube: Cube) -> None:
         cube.invuln -= 1
     if cube.life_lost > 0:
         cube.life_lost -= 1
+    if cube.life_gained > 0:
+        cube.life_gained -= 1
+    if cube.dead and b.settings.death_shrink and cube.death_anim < DEATH_SHRINK:
+        # K.O. : le cube rapetisse progressivement (et grisé, voir le rendu)
+        cube.death_anim += 1
+        k = cube.death_anim / DEATH_SHRINK
+        target = max(5, round(cube.death_from * DEATH_SCALE))
+        cube.size = round(cube.death_from + (target - cube.death_from) * k)
     if cube.boots > 0:
         cube.boots -= 1
         if cube.boots == 0:
@@ -457,6 +476,11 @@ def knock_out(b: "Battle", cube: Cube) -> None:
     cube.kb_y += cube.dy * v
     cube.dead = True
     cube.stun = cube.frozen = cube.slow = cube.boots = cube.roller = cube.magnet = 0
+    if s.death_shrink:
+        cube.potion = cube.resize_anim = 0
+        cube.big = False
+        cube.death_anim = 0
+        cube.death_from = cube.size
     b.aims = [a for a in b.aims if a.shooter != cube.idx and a.target != cube.idx]
     light = palette.TEAMS[cube.team][2]
     anchor = "bottom" if cube.cy < b.H / 2 else "top"

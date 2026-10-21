@@ -353,8 +353,8 @@ class Renderer:
 
     def _lives(self, surf, c, x, y):
         """Petits points de vie sous le cube (au-dessus s'il touche le bas de l'arène)."""
-        total = self.b.settings.lives
-        if total <= 0 or c.dead:
+        total = max(self.b.settings.lives, c.lives)
+        if self.b.settings.lives <= 0 or c.dead:
             return
         L = self.L
         w = total * 3 + 1
@@ -364,7 +364,9 @@ class Renderer:
             py = y - 5
         pygame.draw.rect(surf, palette.BLACK, (px, py, w, 4))
         for k in range(total):
-            if k < c.lives:
+            if k == c.lives - 1 and c.life_gained > 0:
+                color = palette.GREEN_LIGHT if (c.life_gained // 4) % 2 == 0 else palette.WHITE
+            elif k < c.lives:
                 color = palette.WHITE
             elif k == c.lives and c.life_lost > 0:
                 color = palette.RED if (c.life_lost // 4) % 2 == 0 else palette.WHITE
@@ -376,8 +378,10 @@ class Renderer:
         """Dessine un cube ; s'il vient d'être touché par l'objet d'un autre cube :
         écrasement/étirement élastique, flash blanc, yeux plissés et anneau d'impact."""
         if c.hit_anim <= 0:
+            # K.O. : clignote entre sa couleur et le gris pendant qu'il rapetisse, puis reste gris
+            grey = c.dead and self.b.settings.death_shrink and not (c.death_anim < 18 and (c.death_anim // 3) % 2 == 0)
             art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0 or c.dead, flash=flash,
-                          frozen=c.frozen > 0, dead=c.dead)
+                          frozen=c.frozen > 0, dead=grey)
             return
         t = HIT_ANIM - c.hit_anim
         amp = 0.4 * (1 - t / HIT_ANIM) * math.cos(t * 0.75)

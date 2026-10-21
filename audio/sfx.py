@@ -75,6 +75,7 @@ _meta("reveal_ding", 9, 0.6, "reveal")
 _meta("lead_change", 8, 0.6)
 _meta("slowmo", 8, 0.6)
 _meta("slash", 8, 0.6)
+_meta("pickup_heart", 7, 0.7, "pickup")
 _meta("ko", 9, 0.8)
 
 
@@ -283,6 +284,10 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
     bank["slash"] = overlay(
         (osc("noise", np.geomspace(16000, 2500, n), n, seed=20) * adsr(n, 0.002, 0.04, 0.5, 0.08) * 0.7, 0),
         (tone("square", 2600, 0.08, f_end=900, duty=0.125, vol=0.25), 0),
+    )
+    bank["pickup_heart"] = overlay(
+        (_jingle(["C5", "E5", "G5", "C6", "G5", "C6", "E6"], 0.045, wave="triangle", vol=0.6), 0),
+        (_jingle(["E6", "G6", "C7"], 0.06, duty=0.125, vol=0.25), 0.18),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 
