@@ -124,6 +124,17 @@ class Wave:
 
 
 @dataclass
+class Slash:
+    """Trait de coup (blanc cerclé de noir) affiché quelques images sur un impact."""
+    x: float                 # centre, coordonnées d'arène
+    y: float
+    angle: float
+    length: float
+    start: int
+    life: int
+
+
+@dataclass
 class Particle:
     x: float
     y: float

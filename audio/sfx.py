@@ -74,6 +74,7 @@ _meta("drumroll", 9, 0.7)
 _meta("reveal_ding", 9, 0.6, "reveal")
 _meta("lead_change", 8, 0.6)
 _meta("slowmo", 8, 0.6)
+_meta("slash", 8, 0.6)
 _meta("ko", 9, 0.8)
 
 
@@ -277,6 +278,11 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
     bank["slowmo"] = overlay(
         (tone("saw", 220, 0.5, f_end=55, vol=0.4, a=0.005, d=0.1, s=0.7, r=0.2), 0),
         (lowpass(_noise(0.5, 3000, 0.3, d=0.1, s=0.5, r=0.2, seed=19, rate_end=400), 6), 0),
+    )
+    n = n_samples(0.16)
+    bank["slash"] = overlay(
+        (osc("noise", np.geomspace(16000, 2500, n), n, seed=20) * adsr(n, 0.002, 0.04, 0.5, 0.08) * 0.7, 0),
+        (tone("square", 2600, 0.08, f_end=900, duty=0.125, vol=0.25), 0),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 

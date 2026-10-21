@@ -15,12 +15,15 @@ from tkinter import messagebox, ttk
 
 from game import league
 from game import settings as cfg
+from game.maps import MAP_NAMES
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
 ROOT = cfg.ROOT
 MAIN = ROOT / "main.py"
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 PLAYER_CHOICES = {0: "Aléatoire (2 à 4)", 2: "2 joueurs", 3: "3 joueurs", 4: "4 joueurs"}
+MAP_CHOICES = {"random": "Aléatoire (toutes)", **{name: name for name in MAP_NAMES},
+               "generated": "Obstacles au hasard"}
 
 
 def python_exe() -> str:
@@ -63,8 +66,18 @@ class ControlPanel:
         self._spin(box, 2, "Vitesse à la fin (x)", self.speed_ramp, 1.0, 3.0, 0.1)
         ttk.Label(box, text="1.0 = vitesse constante ; 1.8 = 80 % plus rapide à la fin du chrono",
                   foreground="#666").grid(row=3, column=0, columnspan=2, sticky="w")
+        ttk.Label(box, text="Carte").grid(row=6, column=0, sticky="w")
+        self.map = tk.StringVar(value=MAP_CHOICES.get(self.s.map, MAP_CHOICES["random"]))
+        mcombo = ttk.Combobox(box, textvariable=self.map, values=list(MAP_CHOICES.values()),
+                              state="readonly", width=18)
+        mcombo.grid(row=6, column=1, sticky="w", padx=6, pady=2)
+        mcombo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
         self.obstacles = tk.IntVar(value=self.s.obstacles)
-        self._spin(box, 4, "Obstacles dans l'arène (0 à 4)", self.obstacles, 0, 4, 1)
+        self._spin(box, 4, "Obstacles (mode « au hasard »)", self.obstacles, 0, 4, 1)
+        self.escalation = tk.BooleanVar(value=self.s.escalation)
+        ttk.Checkbutton(box, text="Mode escalade : de plus en plus d'objets, de vitesse et d'impacts",
+                        variable=self.escalation, command=self.on_change).grid(
+            row=7, column=0, columnspan=2, sticky="w")
         self.lives = tk.IntVar(value=self.s.lives)
         self._spin(box, 5, "Vies par cube (0 = illimitées)", self.lives, 0, 5, 1)
 
@@ -213,6 +226,9 @@ class ControlPanel:
         s.league = f["league"]
         s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
+        label = self.map.get()
+        s.map = next((k for k, v in MAP_CHOICES.items() if v == label), "random")
+        s.escalation = bool(self.escalation.get())
         s.speed_ramp = round(min(3.0, max(1.0, float(self._get(self.speed_ramp, s.speed_ramp)))), 2)
         for kind, var in self.prob_vars.items():
             setattr(s, f"prob_{kind}", float(round(self._get(var, 0))))

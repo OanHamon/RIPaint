@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from engine8bit import palette
 
 from . import physics
-from .entities import Aim, Bomb, Bullet, Cube, Item, Swipe, Wave
+from .entities import Aim, Bomb, Bullet, Cube, Item, Slash, Swipe, Wave
 from .settings import ITEM_KINDS
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ def nearest_opponent(b: "Battle", cube: Cube) -> Cube | None:
 
 def try_spawn(b: "Battle") -> None:
     s = b.settings
-    if len(b.items) >= s.max_items:
+    if len(b.items) >= b.max_items_now():
         return
     weights = s.item_weights()
     if b.hourglasses_spawned >= s.max_hourglasses:
@@ -159,6 +159,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
                 c.frozen = frames
                 c.kb_x = c.kb_y = 0.0
                 c.hit_anim = HIT_ANIM
+                impact(b, c, c.cx - cube.cx, c.cy - cube.cy)
                 damage(b, c, can_ko=False)   # la glace touche tout le monde : elle ne peut pas achever
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.SKY, 10)
         b.emit("freeze")
@@ -209,7 +210,7 @@ def update_aims(b: "Battle") -> None:
 
 
 def update_bullets(b: "Battle") -> None:
-    speed = b.settings.bullet_speed / 60
+    speed = b.settings.bullet_speed * (1 + 0.5 * b.intensity()) / 60
     steps = max(1, math.ceil(speed / 0.5))
     step = speed / steps
     for bullet in b.bullets:
@@ -246,6 +247,7 @@ def update_bullets(b: "Battle") -> None:
                 hit.stun = round(b.settings.stun_duration * 60)
                 hit.kb_x = hit.kb_y = 0.0
                 hit.hit_anim = HIT_ANIM
+                impact(b, hit, bullet.dx, bullet.dy)
                 b.emit("bullet_hit")
                 hit.kb_x, hit.kb_y = bullet.dx * 50, bullet.dy * 50
                 damage(b, hit)
@@ -290,6 +292,7 @@ def update_swipes(b: "Battle") -> None:
                 c.kb_x, c.kb_y = kx * KNOCKBACK_SPEED, ky * KNOCKBACK_SPEED
                 c.slow = round(s.slow_duration * 60)
                 c.hit_anim = HIT_ANIM
+                impact(b, c, kx, ky)
                 damage(b, c)
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
@@ -326,6 +329,7 @@ def update_bombs(b: "Battle") -> None:
                     kx, ky = math.cos(a), math.sin(a)
                 c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
                 c.hit_anim = HIT_ANIM
+                impact(b, c, kx, ky)
                 damage(b, c)
         ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
         b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
@@ -419,6 +423,7 @@ def update_waves(b: "Battle") -> None:
             if abs(across - w.band) <= w.half + c.half and abs(along - w.origin) <= d1 + c.half:
                 w.hit.add(c.idx)
                 c.hit_anim = HIT_ANIM
+                impact(b, c, *((1.0, 0.0) if w.horizontal else (0.0, 1.0)))
                 b.emit("splat", gain=0.6)
                 damage(b, c)                      # la vague retire aussi une vie
         if w.origin - d1 <= 0 and w.origin + d1 >= length:
@@ -459,3 +464,23 @@ def knock_out(b: "Battle", cube: Cube) -> None:
     b.emit("ko")
     b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 14)
     b.trigger_slowmo()
+
+
+# ---- Mode escalade : effets d'impact ----------------------------------------------------------
+
+def impact(b: "Battle", cube: Cube, dx: float, dy: float) -> None:
+    """Coup reçu : traits de slash blancs/noirs, secousse et images d'impact noir et blanc,
+    d'autant plus marqués que la partie avance (mode escalade uniquement)."""
+    if not b.settings.escalation:
+        return
+    i = b.intensity()
+    base = math.atan2(dy, dx) if (dx or dy) else b.fx.uniform(0, math.pi)
+    n = 1 + round(2 * i)
+    for k in range(n):
+        angle = base + math.pi / 2 + (k - (n - 1) / 2) * 0.5 + b.fx.uniform(-0.25, 0.25)
+        b.slashes.append(Slash(cube.cx, cube.cy, angle, 16 + 30 * i, b.frame, 7 + round(5 * i)))
+    if i > 0.2:
+        b.impact = max(b.impact, 2 + round(2 * i))     # 1 à 3 images visibles, façon manga
+    b.shake = max(b.shake, round(4 + 10 * i))
+    b.shake_amp = max(b.shake_amp, 1 + round(2 * i))
+    b.emit("slash", gain=0.5 + 0.5 * i)

@@ -129,6 +129,8 @@ class Renderer:
         self._bullets(surf)
         self._cubes(surf)
         self._particles(surf, 0)
+        if b.impact > 0 or b.slashes:
+            self._impact_fx(surf)
         if b.flash > 0 or b.slowmo > 0:
             self._slowmo_fx(surf)
         if b.phase == "teaser":
@@ -147,7 +149,7 @@ class Renderer:
         self._particles(surf, 1)
         if b.shake > 0:
             dx, dy = ((1, 0), (-1, 1), (0, -1), (1, 1), (-1, 0), (0, 1))[b.frame % 6]
-            surf.scroll(dx, dy)
+            surf.scroll(dx * b.shake_amp, dy * b.shake_amp)
 
     # ---- Arène ---------------------------------------------------------------------------
 
@@ -452,6 +454,10 @@ class Renderer:
         y = L.scores_y
         pygame.draw.rect(surf, palette.BLACK, (x0, y, w, 7))
         pygame.draw.rect(surf, palette.GREY_DARK, (x0 + 1, y + 1, w - 2, 5))
+        if b.phase == "intro" and b.map_name:
+            # pendant le compte à rebours : nom de la carte à la place des pourcentages (tous à 0)
+            font.draw(surf, f"MAP: {b.map_name}", L.center_x, y + 9, palette.WHITE, 1, "center")
+            return
         if b.scores_hidden():
             # suspense : barre brouillée et « ??% »
             for xx in range(x0 + 1, x0 + w - 1):
@@ -542,6 +548,34 @@ class Renderer:
             pygame.draw.rect(surf, palette.YELLOW, (L.arena_x + 3, cy - 4, b.W - 6, 58), 1)
             font.draw(surf, "WHO", L.center_x, cy, palette.YELLOW_LIGHT, 3, "center")
             font.draw(surf, "WINS?", L.center_x, cy + 26, palette.YELLOW_LIGHT, 3, "center")
+
+    def _impact_fx(self, surf):
+        """Mode escalade : images d'impact noir et blanc (façon manga) et traits de slash."""
+        b, L = self.b, self.L
+        invert = False
+        if b.impact > 0:
+            sub = surf.subsurface((L.arena_x, L.arena_y, b.W, b.H))
+            arr = pygame.surfarray.pixels3d(sub)
+            bright = arr.astype(np.int16).sum(axis=2) > 150       # peinture et cubes clairs -> blanc
+            invert = b.impact % 2 == 0                              # alternance positif / négatif
+            if invert:
+                bright = ~bright
+            arr[bright] = palette.WHITE
+            arr[~bright] = palette.BLACK
+            del arr, sub
+        core, edge = (palette.BLACK, palette.WHITE) if invert else (palette.WHITE, palette.BLACK)
+        for s in b.slashes:
+            age = b.frame - s.start
+            if age >= s.life - 3 and age % 2:
+                continue                                            # le trait s'efface en clignotant
+            length = s.length * min(1.0, (age + 1) / 2) * (1 - 0.3 * age / s.life)
+            ca, sa = math.cos(s.angle), math.sin(s.angle)
+            x0 = L.arena_x + s.x - ca * length / 2
+            y0 = L.arena_y + s.y - sa * length / 2
+            x1 = L.arena_x + s.x + ca * length / 2
+            y1 = L.arena_y + s.y + sa * length / 2
+            pygame.draw.line(surf, edge, (x0, y0), (x1, y1), 3)
+            pygame.draw.line(surf, core, (x0, y0), (x1, y1), 1)
 
     def _slowmo_fx(self, surf):
         """Ralenti : flash blanc au déclenchement puis cadre qui pulse autour de l'arène."""

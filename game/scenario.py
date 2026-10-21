@@ -38,7 +38,10 @@ def random_direction(rng: random.Random) -> tuple[float, float]:
     return math.cos(a), math.sin(a)
 
 
-def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obstacles=()) -> Scenario:
+def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obstacles=(),
+                  strict: bool = False) -> Scenario:
+    """`strict` : un cube ne démarre JAMAIS sur ou contre un obstacle (cartes dessinées).
+    Sans `strict`, placement d'origine (conservé pour rejouer à l'identique les anciennes vidéos)."""
     rng = random.Random(seed)
     n = rng.randint(2, 4)            # toujours tiré, pour que la seed garde le même sens
     if settings.players in (2, 3, 4):
@@ -55,18 +58,36 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obs
     for team in teams:
         # si la place manque, on réduit progressivement l'écart minimal (jamais de chevauchement)
         dist = min_dist
-        while True:
-            for _ in range(500):
+        if strict:
+            clear = size / 2 + 4
+
+            def free(x, y):
+                return not any(x0 - clear < x < x1 + clear and y0 - clear < y < y1 + clear
+                               for x0, y0, x1, y1 in obstacles)
+            tries = 0
+            while True:
                 x = rng.uniform(margin, arena_w - margin)
                 y = rng.uniform(margin, arena_h - margin)
-                if all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes) and not any(
-                        x0 - size < x < x1 + size and y0 - size < y < y1 + size for x0, y0, x1, y1 in obstacles):
+                tries += 1
+                if free(x, y) and all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes):
                     break
-            else:
-                dist *= 0.85
-                if dist >= size * 1.6:
-                    continue
-            break
+                if tries % 500 == 0:
+                    dist = max(size * 1.2, dist * 0.85)
+                if tries > 20000 and free(x, y):
+                    break
+        else:
+            while True:
+                for _ in range(500):
+                    x = rng.uniform(margin, arena_w - margin)
+                    y = rng.uniform(margin, arena_h - margin)
+                    if all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes) and not any(
+                            x0 - size < x < x1 + size and y0 - size < y < y1 + size for x0, y0, x1, y1 in obstacles):
+                        break
+                else:
+                    dist *= 0.85
+                    if dist >= size * 1.6:
+                        continue
+                break
         dx, dy = random_direction(rng)
         cubes.append(CubeStart(team, x, y, dx, dy))
     hooks = [h for h in settings.hooks if h.strip()] or ["PICK YOUR COLOR!"]

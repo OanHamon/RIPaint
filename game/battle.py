@@ -19,7 +19,7 @@ from . import items as item_logic
 from . import physics
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
-from .obstacles import make_obstacles
+from . import maps
 from .scenario import make_scenario, random_direction
 from .settings import Settings
 
@@ -65,8 +65,9 @@ class Battle:
                                   settings.arena_centered)
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
         # obstacles d'abord (générateur à part), puis les cubes qui les évitent
-        self.obstacles = make_obstacles(seed, settings.obstacles, settings.cube_size, self.W, self.H)
-        self.scenario = make_scenario(seed, settings, self.W, self.H, self.obstacles)
+        self.map_name, self.obstacles = maps.build(seed, settings, self.W, self.H)
+        self.scenario = make_scenario(seed, settings, self.W, self.H, self.obstacles,
+                                      strict=getattr(settings, "map", "generated") != "generated")
         self.rng = self.scenario.rng
         self.fx = random.Random(seed * 31 + 7)        # aléatoire purement visuel
         self.hook = self.scenario.hook
@@ -102,6 +103,9 @@ class Battle:
         self.result_text = ""
         self.slowmo = 0
         self.flash = 0
+        self.slashes = []                       # traits de coups (mode escalade)
+        self.impact = 0                         # images d'impact noir et blanc restantes
+        self.shake_amp = 1
         self.leader: int | None = None          # leader « officiel » (porte la couronne)
         self.last_lead_frame = -10 ** 6
         self.crown_jump: tuple | None = None    # (ancien leader, nouveau, image) pour l'animation
@@ -181,6 +185,22 @@ class Battle:
         if self.phase == "battle":
             return self.battle_end - self.frame <= hide
         return self.phase == "outro"
+
+    def intensity(self) -> float:
+        """Mode escalade : 0 au GO -> 1 à la fin du chrono de base (montée progressive, au carré)."""
+        if not self.settings.escalation or self.frame < self.battle_start:
+            return 0.0
+        t = min(1.0, (self.frame - self.battle_start) / max(1, self.base_battle_frames))
+        return t * t
+
+    def max_items_now(self) -> int:
+        return self.settings.max_items + (round(3 * self.intensity()) if self.settings.escalation else 0)
+
+    def spawn_interval_now(self) -> int:
+        """Escalade : un objet toutes les 5 s au début, toutes les ~1,4 s à la fin."""
+        if not self.settings.escalation:
+            return self.interval
+        return max(45, round(self.interval * (1 - 0.72 * self.intensity())))
 
     def trigger_slowmo(self) -> None:
         if self.settings.slowmo and self.slowmo == 0 and self.phase == "battle":
@@ -262,6 +282,12 @@ class Battle:
             self._update_particles()
         if self.flash > 0:
             self.flash -= 1
+        if self.impact > 0:
+            self.impact -= 1
+        if self.slashes:
+            self.slashes = [s for s in self.slashes if self.frame - s.start < s.life]
+        if self.shake == 0:
+            self.shake_amp = 1
         if self.timer_flash > 0:
             self.timer_flash -= 1
         if self.shake > 0:
@@ -285,7 +311,7 @@ class Battle:
         s = self.settings
         if f >= self.next_spawn:
             item_logic.try_spawn(self)
-            self.next_spawn += self.interval
+            self.next_spawn += self.spawn_interval_now()
 
         for c in self.cubes:
             if c.stun > 0:
@@ -299,7 +325,7 @@ class Battle:
             item_logic.update_resize(self, c)
             item_logic.update_cube_timers(self, c)
 
-        ramp = self.speed_multiplier()
+        ramp = self.speed_multiplier() * (1 + 0.35 * self.intensity())
         base = self.base_battle_frames
         if s.speed_ramp > 1.05 and f - self.battle_start in (base // 3, 2 * base // 3):
             self.popup("SPEED UP!", palette.WHITE, duration=72)

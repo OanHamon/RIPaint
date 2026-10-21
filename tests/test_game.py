@@ -116,8 +116,10 @@ def test_zero_probability_item_never_spawns():
 
 
 def test_max_items_respected():
-    s = Settings(item_interval=0.5, max_items=3)
+    s = Settings(item_interval=0.5, max_items=3, escalation=False)
     run(13, s, check=lambda b: (len(b.items) <= 3) or pytest.fail("trop d'objets"))
+    s = Settings(item_interval=0.5, max_items=3)                       # escalade : jusqu'à 3 de plus
+    run(13, s, check=lambda b: (len(b.items) <= b.max_items_now() <= 6) or pytest.fail("trop d'objets"))
 
 
 def test_items_not_spawned_on_cubes_or_walls():
@@ -458,7 +460,7 @@ def test_bullet_still_faster_than_fastest_cube():
 def test_obstacles_count_symmetry_and_corridors(count):
     from game.physics import OBSTACLE
     for seed in range(20):
-        b = Battle(seed, Settings(obstacles=count))
+        b = Battle(seed, Settings(obstacles=count, map="generated"))
         assert len(b.obstacles) <= count
         if count <= 3:
             assert len(b.obstacles) == count
@@ -476,7 +478,7 @@ def test_obstacles_count_symmetry_and_corridors(count):
 
 
 def test_no_obstacles_means_same_game_as_before():
-    a = run(321, Settings(obstacles=0))
+    a = run(321, Settings(obstacles=0, map="generated"))
     assert a.obstacles == [] and a.paintable == a.W * a.H
 
 

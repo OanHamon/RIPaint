@@ -70,7 +70,9 @@ La souris fonctionne aussi : clic ou glisser sur les curseurs, clic sur `◀` `�
 | Nombre de joueurs | « Aléatoire (2 à 4) » ou 2, 3, 4 cubes fixes. |
 | Taille des cubes | En pixels logiques (13 par défaut ; 5 à 16). Plus gros = plus de chocs et d'interactions. |
 | Vies par cube | 3 petits points sous chaque cube (0 = désactivé, jusqu'à 5). Chaque objet adverse qui touche un cube (balle, pinceau, bombe, glace, vague) lui retire une vie, avec 0,75 s d'invulnérabilité ensuite. À 0 : K.O., yeux en croix, il glisse en ralentissant puis ne peint plus. La glace, qui touche tous les adversaires d'un coup, ne peut pas achever un cube. |
-| Obstacles dans l'arène | 0 à 4 petits blocs de pierre disposés en miroir (3 par défaut). Les cubes rebondissent dessus, les balles s'y écrasent, la peinture ne les recouvre pas et ils ne comptent pas dans le score. |
+| Carte | « Aléatoire (toutes) » : une des 9 cartes dessinées (OPEN, PILLARS, CROSS, TEETH, CORRIDOR, DIAMOND, ZIGZAG, RING, S-WALLS), orientée au hasard ; ou une carte précise ; ou « Obstacles au hasard ». Le nom s'affiche pendant le compte à rebours. |
+| Mode escalade | Plus la partie avance, plus c'est la guerre : un objet toutes les 5 s au début puis toutes les ~1,4 s, jusqu'à 6 objets en même temps, cubes et balles qui accélèrent, et des coups de plus en plus marqués (slashs blancs/noirs, images d'impact façon manga, secousses). Environ 56 % des parties ont au moins un K.O. (25 % sans). |
+| Obstacles (mode « au hasard ») | 0 à 4 petits blocs de pierre disposés en miroir (3 par défaut). Les cubes rebondissent dessus, les balles s'y écrasent, la peinture ne les recouvre pas et ils ne comptent pas dans le score. |
 | Vitesse à la fin (x) | Les cubes accélèrent progressivement du GO jusqu'à la fin du chrono (1.8 = 80 % plus vite à la fin ; 1.0 = vitesse constante). « SPEED UP! » est annoncé au tiers et aux deux tiers. |
 | Probabilité des objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
 | Intervalle | Temps entre deux apparitions d'objets (5 s par défaut). |
@@ -142,7 +144,9 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `cube_size` | 13 | Taille des cubes en pixels logiques (x2 avec la potion) |
 | `lives` | 3 | Vies par cube (0 = illimitées) |
 | `arena_centered` | true | Arène centrée sur l'écran (false = ancienne mise en page, décalée à gauche) |
-| `obstacles` | 3 | Nombre d'obstacles dans l'arène (0 = aucun) |
+| `map` | random | `random`, un nom de carte (ex. `CROSS`) ou `generated` (obstacles au hasard) |
+| `escalation` | true | Mode escalade |
+| `obstacles` | 3 | Nombre d'obstacles en mode `generated` |
 | `speed_ramp` | 1.8 | Multiplicateur de vitesse atteint à la fin du chrono de base |
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |
 | `safe_top` / `safe_bottom` / `safe_right` | 130 / 400 / 140 | Zones de sécurité TikTok en pixels de la vidéo finale |

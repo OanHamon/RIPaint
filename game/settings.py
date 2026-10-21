@@ -93,6 +93,8 @@ class Settings:
     cube_size: int = 13
     arena_centered: bool = True       # arène centrée sur l'écran (False = ancienne mise en page)
     lives: int = 3                    # vies par cube (0 = illimitées)
+    map: str = "random"               # « random », un nom de carte, ou « generated » (obstacles au hasard)
+    escalation: bool = True           # plus le temps passe, plus c'est la guerre (objets, vitesse, effets)
     obstacles: int = 3                # petits blocs fixes dans l'arène (0 = aucun)
     speed_ramp: float = 1.8           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
     cube_speed: float = 54.0          # px logiques / s
