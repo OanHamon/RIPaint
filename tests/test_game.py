@@ -614,6 +614,126 @@ def test_ice_cannot_finish_off_a_cube():
     assert v.lives == 1 and not v.dead and v.frozen > 0
 
 
+# ---- Modes de jeu ----------------------------------------------------------------------
+
+from game import modes  # noqa: E402
+
+
+def test_classic_mode_keeps_user_settings():
+    s = Settings(prob_gun=7, lives=4)
+    b = Battle(11, s)
+    assert b.mode is None and b.settings is s
+    assert run(11, Settings()).subtitles == run(11, Settings(mode="classic")).subtitles
+
+
+def test_mode_overrides_do_not_touch_user_settings():
+    s = Settings(mode="suddendeath", lives=4)
+    b = Battle(11, s)
+    assert b.settings.lives == 1 and b.settings.prob_ice == 0
+    assert s.lives == 4 and s.prob_ice == 20
+
+
+@pytest.mark.parametrize("mode", modes.MODES, ids=lambda m: m.key)
+def test_each_mode_only_spawns_its_items_and_finishes(mode):
+    seen = set()
+    from game.physics import OBSTACLE
+
+    def check(b):
+        seen.update(i.kind for i in b.items)
+        for c in b.cubes:
+            x0, y0, x1, y1 = c.rect()
+            assert -1 <= x0 and x1 <= b.W + 1 and -1 <= y0 and y1 <= b.H + 1
+            for ox0, oy0, ox1, oy1 in b.obstacles:
+                ox = min(c.cx + c.half, ox1) - max(c.cx - c.half, ox0)
+                oy = min(c.cy + c.half, oy1) - max(c.cy - c.half, oy0)
+                assert min(ox, oy) < 1.5, "cube dans un obstacle"
+
+    for seed in (3, 77):
+        b = run(seed, Settings(mode=mode.key, obstacles=4), check=check)
+        assert b.result is not None and b.mode is mode
+        assert (b.grid != OBSTACLE).sum() == b.paintable
+    allowed = {k for k, w in mode.weights.items() if w > 0}
+    assert seen and seen <= allowed
+
+
+def test_mode_shown_in_intro_subtitle_and_renders():
+    b = Battle(5, Settings(mode="kaboom"))
+    assert b.subtitles[0][2].startswith("KABOOM MODE!")
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    for _ in range(b.battle_start + 5):
+        b.step()
+        r.draw(surf)
+
+
+def test_random_mode_depends_on_seed_only():
+    s = Settings(mode="random")
+    picked = [modes.resolve(seed, s).key for seed in range(60)]
+    assert picked == [modes.resolve(seed, s).key for seed in range(60)]
+    assert set(picked) == set(modes.BY_KEY)
+    assert Battle(8, s).mode is modes.resolve(8, s)
+
+
+def test_mode_names_fit_in_arena():
+    from engine8bit import font
+    b = Battle(1, Settings())
+    for m in modes.MODES:
+        assert all(font.text_width(line, 2) <= b.W for line in font.wrap(m.name, b.W, 2))
+        assert set(m.weights) <= set(ITEM_KINDS)
+        assert all(hasattr(Settings, k) for k in m.overrides)
+
+
+def test_mode_saved_in_settings():
+    assert Settings.from_dict(Settings(mode="turbo").to_dict()).mode == "turbo"
+
+
+def _spawn_gaps(settings, seed=4):
+    b, times = Battle(seed, settings), []
+    last = b.next_spawn
+    while not b.done:
+        b.step()
+        if b.next_spawn != last:
+            times.append(last)
+            last = b.next_spawn
+    return np.diff(times), b
+
+
+def test_item_ramp_one_keeps_constant_interval():
+    gaps, b = _spawn_gaps(Settings())
+    assert set(gaps) == {b.interval}
+
+
+def test_item_ramp_speeds_up_drops_until_end_of_timer():
+    gaps, b = _spawn_gaps(Settings(item_interval=4.0, item_ramp=0.5))
+    assert gaps[0] >= 220 and gaps[-1] <= 135          # ~4 s au début -> ~2 s à la fin
+    assert all(x >= y for x, y in zip(gaps, gaps[1:]))
+
+
+@pytest.mark.parametrize("mode", [m for m in modes.MODES if m.key != "escalation"], ids=lambda m: m.key)
+def test_mode_sets_speed_and_drop_rhythm_and_video_stays_over_a_minute(mode):
+    b = Battle(3, Settings(mode=mode.key, battle_duration=20, speed_ramp=1.0, item_interval=9, item_ramp=1.0))
+    for key in ("speed_ramp", "item_interval", "item_ramp"):
+        assert key in mode.overrides
+    assert b.interval == round(mode.overrides["item_interval"] * FPS)
+    assert b.total_frames >= 62 * FPS                     # la règle des > 1 min prime sur le mode
+    if "battle_duration" in mode.overrides:
+        assert b.base_battle_frames == round(mode.overrides["battle_duration"] * FPS)
+    assert "s · vitesse ×" in modes.summary(b.settings)
+
+
+def test_escalation_is_only_a_mode():
+    assert not Settings().escalation
+    for m in modes.MODES:
+        assert Battle(3, Settings(mode=m.key, escalation=True)).settings.escalation == (m.key == "escalation")
+    b = Battle(3, Settings(mode="escalation"))
+    b.frame = b.battle_start + b.base_battle_frames
+    assert b.spawn_interval_now() == max(45, round(b.interval * 0.28))
+    assert b.max_items_now() == b.settings.max_items + 3
+
+
+def test_sudden_death_keeps_one_life_in_duel():
+    b = Battle(3, Settings(mode="suddendeath", players=2))
+    assert b.start_lives == 1 and all(c.lives == 1 for c in b.cubes)
 
 # ---- Cœur et cube K.O. qui rapetisse --------------------------------------------------------
 

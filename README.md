@@ -17,6 +17,27 @@ une arène en rebondissant, ramassent des objets, et la couleur qui couvre le pl
 | Bottes | Le cube va 1,8 fois plus vite pendant 5 s (traînée de fantômes) |
 | Cœur | +1 vie au cube qui le ramasse (jusqu'à 2 vies de plus qu'au départ) ; n'apparaît pas si les vies sont désactivées |
 
+**Modes de jeu** (réglage « Mode ») : un mode impose ses probabilités d'objets, l'accélération des cubes,
+le rythme d'apparition des bonus (qui peut s'accélérer jusqu'à la fin du chrono) et parfois une partie plus
+longue ; son nom s'affiche dans un bandeau pendant le compte à rebours et figure dans le nom du fichier.
+« classique » garde vos réglages, « aléatoire » tire un mode différent pour chaque vidéo (selon la seed).
+La règle des vidéos de plus d'1 minute passe avant tout : aucun mode ne raccourcit la vidéo.
+
+| Mode | Objets | Bataille | Vitesse finale | Bonus (GO → fin) | Caractère |
+|------|--------|----------|----------------|------------------|-----------|
+| *classique* | vos curseurs | 51 s | ×1,8 | 5 s | vos réglages, sans escalade |
+| KABOOM | Bombes, fusils, un peu de cœurs | 51 s | ×1,8 | 3 s → 1,5 s | Mèche courte, grosses explosions, final en pluie de bombes |
+| GOGO PAINT | Rouleaux, seaux, pinceaux, potions | 51 s | ×1,6 | 2 s → 1,4 s | Vies illimitées : course à la peinture pure |
+| BLIZZARD | Glace, fusils, bottes, un peu de cœurs | 55 s | ×1,5 | 3,5 s | Partie lente : la glace fige tout le monde, les fusils achèvent |
+| TURBO | Bottes, rouleaux, aimants | 51 s | ×2,3 | 3 s → 1,8 s | Nerveuse, cubes plus rapides dès le départ |
+| TITANS | Potions, pinceaux, rouleaux | 60 s | ×1,4 | 4 s | Géants lents, potions de 9 s et grand pinceau |
+| LOOT RAIN | Tous | 51 s | ×1,8 | 1,2 s → 1 s | Jusqu'à 8 objets à la fois, aimants en bonus |
+| ALL-OUT WAR (Escalade) | Tous | 51 s | ×1,8 | 5 s → 1,4 s | Plus le temps passe, plus c'est la guerre : jusqu'à 6 objets, balles plus rapides, slashs et images d'impact |
+| SUDDEN DEATH | Fusils, bombes, pinceaux, seaux | 51 s | ×2 | 3 s → 1,8 s | Une seule vie, même en duel : le premier touché est K.O. (mais sa peinture reste !) |
+
+Le réglage « Rythme final » (APPARITION) fait la même chose en mode classique : ×0,5 = les bonus
+tombent deux fois plus souvent à la fin du chrono ; ×1 = rythme constant.
+
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
 - Chaque vidéo correspond à une **seed** inscrite dans son nom : la même seed avec les mêmes réglages redonne exactement la même partie
@@ -72,7 +93,7 @@ La souris fonctionne aussi : clic ou glisser sur les curseurs, clic sur `◀` `�
 | Taille des cubes | En pixels logiques (13 par défaut ; 5 à 16). Plus gros = plus de chocs et d'interactions. |
 | Vies par cube | 3 petits points sous chaque cube (0 = désactivé, jusqu'à 5). Chaque objet adverse qui touche un cube (balle, pinceau, bombe, glace, vague) lui retire une vie, avec 0,75 s d'invulnérabilité ensuite. À 0 : K.O., yeux en croix, il se grise et rapetisse, glisse en ralentissant puis ne peint plus. Les cœurs redonnent une vie. La glace, qui touche tous les adversaires d'un coup, ne peut pas achever un cube. |
 | Carte | « Aléatoire (toutes) » : une des 9 cartes dessinées (OPEN, PILLARS, CROSS, TEETH, CORRIDOR, DIAMOND, ZIGZAG, RING, S-WALLS), orientée au hasard ; ou une carte précise ; ou « Obstacles au hasard ». Le nom s'affiche pendant le compte à rebours. |
-| Mode escalade | Plus la partie avance, plus c'est la guerre : un objet toutes les 5 s au début puis toutes les ~1,4 s, jusqu'à 6 objets en même temps, cubes et balles qui accélèrent, et des coups de plus en plus marqués (slashs blancs/noirs, images d'impact façon manga, secousses). Environ 56 % des parties ont au moins un K.O. (25 % sans). |
+| Mode de jeu | Classique, aléatoire ou l'un des 8 modes ci-dessus (voir « Modes de jeu »). L'escalade est le mode « Escalade » : plus la partie avance, plus c'est la guerre : un objet toutes les 5 s au début puis toutes les ~1,4 s, jusqu'à 6 objets en même temps, cubes et balles qui accélèrent, et des coups de plus en plus marqués (slashs blancs/noirs, images d'impact façon manga, secousses). Environ 56 % des parties ont au moins un K.O. (25 % sans). |
 | Obstacles (mode « au hasard ») | 0 à 4 petits blocs de pierre disposés en miroir (3 par défaut). Les cubes rebondissent dessus, les balles s'y écrasent, la peinture ne les recouvre pas et ils ne comptent pas dans le score. |
 | Vitesse à la fin (x) | Les cubes accélèrent progressivement du GO jusqu'à la fin du chrono (1.8 = 80 % plus vite à la fin ; 1.0 = vitesse constante). « SPEED UP! » est annoncé au tiers et aux deux tiers. |
 | Probabilité des objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
@@ -150,7 +171,8 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `death_shrink` | true | Un cube K.O. se grise et rapetisse |
 | `arena_centered` | true | Arène centrée sur l'écran (false = ancienne mise en page, décalée à gauche) |
 | `map` | random | `random`, un nom de carte (ex. `CROSS`) ou `generated` (obstacles au hasard) |
-| `escalation` | true | Mode escalade |
+| `mode` | classic | `classic`, `random` ou un mode (`kaboom`, `gogopaint`, `blizzard`, `turbo`, `titans`, `lootrain`, `escalation`, `suddendeath`) |
+| `item_ramp` | 1.0 | Intervalle des bonus à la fin du chrono (×, 1 = constant) |
 | `obstacles` | 3 | Nombre d'obstacles en mode `generated` |
 | `speed_ramp` | 1.8 | Multiplicateur de vitesse atteint à la fin du chrono de base |
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |

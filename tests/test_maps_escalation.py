@@ -74,7 +74,7 @@ def test_maps_scale_with_arena_and_flip():
 
 
 def test_escalation_ramps_spawns_items_and_speed():
-    b = Battle(20, quick())
+    b = Battle(20, quick(mode="escalation"))
     while b.frame < b.battle_start + 10:
         b.step()
     early = (b.spawn_interval_now(), b.max_items_now(), b.intensity())
@@ -101,7 +101,7 @@ def test_escalation_means_more_war_at_the_end():
 
 def test_impact_effects_grow_with_time():
     from game import items
-    b = Battle(21, quick())
+    b = Battle(21, quick(mode="escalation"))
     while b.frame < b.battle_start + 30:
         b.step()
     c = b.cubes[1]

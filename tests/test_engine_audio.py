@@ -143,3 +143,10 @@ def test_caption_and_video_filename():
     assert video_filename(s2, "X", 7) == "X_cube-battle_seed7.mp4"
     s3 = cfg.Settings(hashtags=["#Cube", " Race ", "foryou"])
     assert s3.caption_text().endswith("#Cube #Race #foryou")
+
+
+def test_video_filename_with_mode():
+    from output.exporter import video_filename
+    s = cfg.Settings()
+    assert video_filename(s, "D", 5, "kaboom").endswith(" - kaboom - seed5.mp4")
+    assert video_filename(cfg.Settings(caption="", hashtags=[]), "D", 5, "kaboom") == "D_cube-battle_kaboom_seed5.mp4"

@@ -13,7 +13,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from game import league
+from game import league, modes
 from game import settings as cfg
 from game.maps import MAP_NAMES
 from game.settings import ITEM_KINDS, ITEM_LABELS
@@ -60,6 +60,15 @@ class ControlPanel:
                              state="readonly", width=18)
         combo.grid(row=0, column=1, sticky="w", padx=6, pady=2)
         combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        ttk.Label(box, text="Mode de jeu").grid(row=9, column=0, sticky="w")
+        mode_labels = dict(modes.CHOICES)
+        self.mode = tk.StringVar(value=mode_labels.get(self.s.mode, mode_labels[modes.CLASSIC]))
+        mode_combo = ttk.Combobox(box, textvariable=self.mode, values=list(mode_labels.values()),
+                                  state="readonly", width=18)
+        mode_combo.grid(row=9, column=1, sticky="w", padx=6, pady=2)
+        mode_combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        self.mode_info = ttk.Label(box, foreground="#666", wraplength=330)
+        self.mode_info.grid(row=10, column=0, columnspan=2, sticky="w")
         self.cube_size = tk.IntVar(value=self.s.cube_size)
         self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
         self.speed_ramp = tk.DoubleVar(value=self.s.speed_ramp)
@@ -74,10 +83,6 @@ class ControlPanel:
         mcombo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
         self.obstacles = tk.IntVar(value=self.s.obstacles)
         self._spin(box, 4, "Obstacles (mode « au hasard »)", self.obstacles, 0, 4, 1)
-        self.escalation = tk.BooleanVar(value=self.s.escalation)
-        ttk.Checkbutton(box, text="Mode escalade : de plus en plus d'objets, de vitesse et d'impacts",
-                        variable=self.escalation, command=self.on_change).grid(
-            row=7, column=0, columnspan=2, sticky="w")
         self.lives = tk.IntVar(value=self.s.lives)
         self._spin(box, 5, "Vies par cube (0 = illimitées)", self.lives, 0, 5, 1)
         self.duel_lives = tk.IntVar(value=self.s.duel_lives)
@@ -133,6 +138,8 @@ class ControlPanel:
         self._spin(box, 0, "Intervalle (secondes)", self.interval, 1, 30, 0.5)
         self._spin(box, 1, "Objets max en même temps", self.max_items, 1, 10, 1)
         self._spin(box, 2, "Sabliers max par partie", self.max_hourglasses, 0, 10, 1)
+        self.item_ramp = tk.DoubleVar(value=self.s.item_ramp)
+        self._spin(box, 3, "Rythme final (x intervalle)", self.item_ramp, 0.3, 2.0, 0.1)
 
         # --- Audio ---
         box = ttk.LabelFrame(main, text="Son", padding=8)
@@ -193,7 +200,7 @@ class ControlPanel:
         ttk.Button(bar2, text="Ouvrir le dossier des vidéos", command=self.open_folder).pack(side="left")
         ttk.Button(bar2, text="Réglages avancés…", command=self.open_config).pack(side="left", padx=6)
 
-        for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size,
+        for var in (self.interval, self.item_ramp, self.max_items, self.max_hourglasses, self.count, self.cube_size,
                     self.speed_ramp, self.obstacles, self.lives, self.duel_lives):
             var.trace_add("write", lambda *_: self.on_change())
         self.on_change(save=False)
@@ -224,6 +231,7 @@ class ControlPanel:
         s = self.s
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
+        s.mode = next((k for k, text in modes.CHOICES if text == self.mode.get()), modes.CLASSIC)
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
         f = {k: bool(v.get()) for k, v in self.flags.items()}
         s.tiktok_rewards = f["tiktok_rewards"]
@@ -239,13 +247,13 @@ class ControlPanel:
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
         label = self.map.get()
         s.map = next((k for k, v in MAP_CHOICES.items() if v == label), "random")
-        s.escalation = bool(self.escalation.get())
         s.speed_ramp = round(min(3.0, max(1.0, float(self._get(self.speed_ramp, s.speed_ramp)))), 2)
         for kind, var in self.prob_vars.items():
             setattr(s, f"prob_{kind}", float(round(self._get(var, 0))))
         s.item_interval = max(0.5, float(self._get(self.interval, s.item_interval)))
         s.max_items = max(1, int(self._get(self.max_items, s.max_items)))
         s.max_hourglasses = max(0, int(self._get(self.max_hourglasses, s.max_hourglasses)))
+        s.item_ramp = round(min(2.0, max(0.3, float(self._get(self.item_ramp, s.item_ramp)))), 2)
         s.master_volume = self._get(self.master, 90) / 100
         s.music_volume = self._get(self.music, 60) / 100
         s.music_enabled = bool(self.music_on.get())
@@ -258,13 +266,23 @@ class ControlPanel:
 
     def on_change(self, save: bool = True):
         s = self.collect()
-        pcts = s.item_percentages()
+        mode = modes.BY_KEY.get(s.mode)
+        shown = modes.apply(s, mode)
+        pcts = shown.item_percentages()
         for kind, lbl in self.pct_labels.items():
-            w = s.item_weights()[kind]
-            if w <= 0:
+            w = shown.item_weights()[kind]
+            if s.mode == modes.RANDOM:
+                lbl.config(text="selon le mode")
+            elif w <= 0:
                 lbl.config(text="jamais")
             else:
-                lbl.config(text=f"{pcts[kind]:.1f} % réel")
+                lbl.config(text=f"{pcts[kind]:.1f} % {'réel' if mode is None else 'mode'}")
+        if s.mode == modes.CLASSIC:
+            self.mode_info.config(text="Objets selon les probabilités ci-contre.\n" + modes.summary(s))
+        elif mode is None:
+            self.mode_info.config(text="Un mode différent tiré pour chaque vidéo.")
+        else:
+            self.mode_info.config(text=mode.pitch[0].upper() + mode.pitch[1:] + ".\n" + modes.summary(shown))
         for lbl, var in self.vol_labels.values():
             lbl.config(text=f"{round(self._get(var, 0))} %")
         if save:

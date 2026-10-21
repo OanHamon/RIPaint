@@ -23,7 +23,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
-from game import league
+from game import league, modes
 from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
@@ -47,6 +47,7 @@ class ExportResult:
     hourglasses: int
     summary: str
     srt_path: Path | None = None
+    mode: str = ""                  # nom du mode de jeu ("" = classique)
 
 
 def ffmpeg_exe() -> str:
@@ -81,10 +82,14 @@ def safe_filename(text: str, limit: int = 140) -> str:
     return cleaned[:limit].rstrip(" .")
 
 
-def video_filename(settings: Settings, stamp: str, seed: int) -> str:
+def video_filename(settings: Settings, stamp: str, seed: int, mode: str = "") -> str:
+    """<date> - <légende TikTok> - [<mode> - ]seed<seed>.mp4"""
     caption = safe_filename(settings.caption_text())
-    middle = f" - {caption} - " if caption else "_cube-battle_"
-    return f"{stamp}{middle}seed{seed}.mp4"
+    if not caption:
+        tag = f"_{mode}" if mode else ""
+        return f"{stamp}_cube-battle{tag}_seed{seed}.mp4"
+    tag = f"{safe_filename(mode)} - " if mode else ""
+    return f"{stamp} - {caption} - {tag}seed{seed}.mp4"
 
 
 def output_dir(settings: Settings) -> Path:
@@ -130,7 +135,8 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     out_dir = out_dir or output_dir(settings)
     # date de création en tête du nom : les vidéos se trient naturellement par date
     stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    final = out_dir / video_filename(settings, stamp, seed)
+    mode = modes.resolve(seed, settings)
+    final = out_dir / video_filename(settings, stamp, seed, mode.key if mode else "")
     tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
@@ -196,7 +202,8 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
             gain *= AAC_CEILING / peak * 0.98
 
         summary = battle.result_text
-        meta = {"seed": seed, "generator": "cube_battle", "result": summary, "settings": settings.to_dict()}
+        meta = {"seed": seed, "generator": "cube_battle", "result": summary,
+                "mode": mode.key if mode else modes.CLASSIC, "settings": battle.settings.to_dict()}
         if new_league is not None:
             meta["league_day"] = new_league["day"]
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
@@ -219,7 +226,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         if progress:
             progress(total, total)
         return ExportResult(final, seed, total, total / FPS, len(battle.cubes), battle.hourglasses_taken,
-                            summary, srt_path)
+                            summary, srt_path, mode.name if mode else "")
     finally:
         for p in (tmp_video, tmp_audio, err_log, *temp_files):
             try:

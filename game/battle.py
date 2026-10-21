@@ -16,7 +16,7 @@ from engine8bit import palette
 from engine8bit.display import FPS
 
 from . import items as item_logic
-from . import physics
+from . import modes, physics
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
 from . import maps
@@ -57,9 +57,29 @@ class Result:
     by_items: bool           # départagé au nombre d'objets ramassés
 
 
+def default_battle_frames(settings: Settings) -> int:
+    """Durée de la bataille hors sabliers : battle_duration, allongée si besoin pour que la
+    vidéo dépasse toujours 1 minute (tiktok_rewards)."""
+    frames = round(settings.battle_duration * FPS)
+    if settings.tiktok_rewards:
+        start = (TEASER_FRAMES + REWIND_FRAMES if settings.teaser else 0) + round(settings.intro_duration * FPS)
+        need = round(settings.min_video_duration * FPS) - start - round(settings.outro_duration * FPS)
+        frames = max(frames, need)
+    return frames
+
+
+def video_seconds(settings: Settings) -> tuple[float, float]:
+    """Durée de la vidéo (sans sablier, avec tous les sabliers possibles), en secondes."""
+    start = (TEASER_FRAMES + REWIND_FRAMES if settings.teaser else 0) + round(settings.intro_duration * FPS)
+    base = (start + default_battle_frames(settings) + round(settings.outro_duration * FPS)) / FPS
+    return base, base + settings.max_hourglasses * settings.hourglass_bonus
+
+
 class Battle:
     def __init__(self, seed: int, settings: Settings, battle_frames: int | None = None):
         self.seed = seed
+        self.mode = modes.resolve(seed, settings)
+        settings = modes.apply(settings, self.mode)
         self.settings = settings
         self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
                                   settings.arena_centered)
@@ -124,18 +144,15 @@ class Battle:
         self.outro_frames = round(settings.outro_duration * FPS)
         self.new_outro = self.outro_frames >= END_FRAMES + REVEAL_FRAMES + LOOP_FRAMES + 90
         if battle_frames is None:
-            battle_frames = round(settings.battle_duration * FPS)
-            if settings.tiktok_rewards:
-                # la vidéo doit toujours dépasser 1 minute, même sans sablier
-                need = round(settings.min_video_duration * FPS) - self.battle_start - self.outro_frames
-                battle_frames = max(battle_frames, need)
+            battle_frames = default_battle_frames(settings)
         self.base_battle_frames = battle_frames
         self.battle_end = self.battle_start + battle_frames
         self.interval = max(1, round(settings.item_interval * FPS))
         self.next_spawn = self.battle_start + self.interval
         self.counts = np.zeros(len(self.cubes), dtype=np.int64)
 
-        self.subtitle(0, self.battle_start, self.hook)
+        intro = self.hook if self.mode is None else f"{self.mode.name} MODE! {self.hook}"
+        self.subtitle(0, self.battle_start, intro)
         if settings.teaser:
             self.subtitle(0, TEASER_FRAMES, "WHO WINS?")
 
@@ -201,10 +218,13 @@ class Battle:
         return self.settings.max_items + (round(3 * self.intensity()) if self.settings.escalation else 0)
 
     def spawn_interval_now(self) -> int:
-        """Escalade : un objet toutes les 5 s au début, toutes les ~1,4 s à la fin."""
-        if not self.settings.escalation:
-            return self.interval
-        return max(45, round(self.interval * (1 - 0.72 * self.intensity())))
+        """Images avant le prochain objet. Escalade : toutes les 5 s au début, ~1,4 s à la fin.
+        Sinon : interval au GO -> interval x item_ramp à la fin du chrono de base (linéaire)."""
+        if self.settings.escalation:
+            return max(45, round(self.interval * (1 - 0.72 * self.intensity())))
+        base = max(1, self.base_battle_frames)
+        t = min(1.0, max(0.0, (self.frame - self.battle_start) / base))
+        return max(1, round(self.interval * (1.0 + (self.settings.item_ramp - 1.0) * t)))
 
     def trigger_slowmo(self) -> None:
         if self.settings.slowmo and self.slowmo == 0 and self.phase == "battle":

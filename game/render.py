@@ -523,6 +523,17 @@ class Renderer:
         scale = 7 if age < 5 else 6
         cy = L.arena_y + b.H // 2 - (7 * scale) // 2
         font.draw(surf, str(n), L.arena_x + b.W // 2, cy, palette.YELLOW_LIGHT, scale, "center")
+        if b.mode is not None:
+            # nom du mode sous le compte à rebours (sur deux lignes s'il est long)
+            lines = font.wrap(b.mode.name, b.W, 2)
+            y = L.arena_y + b.H // 2 + 28
+            band = (L.arena_x, y - 3, b.W, len(lines) * 16 + 5)       # bandeau, comme l'accroche
+            pygame.draw.rect(surf, palette.BLACK, band)
+            pygame.draw.line(surf, b.mode.color, (band[0], band[1]), (band[0] + band[2] - 1, band[1]))
+            pygame.draw.line(surf, b.mode.color, (band[0], band[1] + band[3] - 1),
+                             (band[0] + band[2] - 1, band[1] + band[3] - 1))
+            for i, line in enumerate(lines):
+                font.draw(surf, line, L.arena_x + b.W // 2, y + i * 16, b.mode.color, 2, "center")
 
     def _teaser_look(self, surf, t, title=True):
         """Image d'ouverture : l'arène telle qu'elle sera à la fin, scores cachés, « WHO WINS? ».

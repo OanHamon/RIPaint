@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 6
+CONFIG_VERSION = 7
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots",
@@ -55,7 +55,8 @@ class Settings:
     prob_magnet: float = 20
     prob_boots: float = 20
     prob_heart: float = 15
-    item_interval: float = 5.0        # secondes entre deux apparitions
+    item_interval: float = 5.0        # secondes entre deux apparitions (au GO)
+    item_ramp: float = 1.0            # intervalle x1 au GO -> x item_ramp à la fin du chrono (<1 : de plus en plus vite)
     max_items: int = 3                # objets présents simultanément
     max_hourglasses: int = 3          # sabliers par partie
     hourglass_bonus: float = 3.0      # secondes ajoutées par sablier
@@ -81,6 +82,7 @@ class Settings:
     boots_factor: float = 1.8         # multiplicateur de vitesse des bottes
 
     # Partie
+    mode: str = "classic"             # "classic", "random" ou un mode de game/modes.py
     intro_duration: float = 3.0       # compte à rebours 3-2-1
     battle_duration: float = 50.0     # durée minimale de bataille (allongée si besoin, voir tiktok_rewards)
     outro_duration: float = 7.0       # FIN + révélation des scores + gagnant + retour au début (boucle)
@@ -103,7 +105,7 @@ class Settings:
     max_bonus_lives: int = 2          # vies gagnées avec les cœurs au-delà du départ
     death_shrink: bool = True         # un cube K.O. se grise et rapetisse
     map: str = "random"               # « random », un nom de carte, ou « generated » (obstacles au hasard)
-    escalation: bool = True           # plus le temps passe, plus c'est la guerre (objets, vitesse, effets)
+    escalation: bool = False          # activé par le mode Escalade : plus le temps passe, plus c'est la guerre
     obstacles: int = 3                # petits blocs fixes dans l'arène (0 = aucun)
     speed_ramp: float = 1.8           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
     cube_speed: float = 54.0          # px logiques / s
@@ -199,6 +201,8 @@ def migrate(data: dict) -> dict:
         for key, old_default in (("intro_duration", 5.0), ("outro_duration", 5.0)):
             if data.get(key) == old_default:
                 data.pop(key)
+    if int(data.get("config_version", 1)) < 7:
+        data.pop("escalation", None)   # l'escalade n'est plus une case à cocher : c'est un mode de jeu
     if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:
         data.pop("hooks")       # accroches par défaut en français -> nouvelles accroches anglaises
     data["config_version"] = CONFIG_VERSION
