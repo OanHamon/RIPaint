@@ -69,6 +69,11 @@ _meta("pickup_boots", 7, 0.7, "pickup")
 _meta("boots_end", 5, 0.45)
 _meta("speed_up", 9, 0.7)
 _meta("hurt", 7, 0.55)
+_meta("rewind", 9, 0.6)
+_meta("drumroll", 9, 0.7)
+_meta("reveal_ding", 9, 0.6, "reveal")
+_meta("lead_change", 8, 0.6)
+_meta("slowmo", 8, 0.6)
 _meta("ko", 9, 0.8)
 
 
@@ -245,6 +250,33 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
                 tone("square", note("G4"), 0.35, f_end=note("C4"), duty=0.25, vol=0.4, r=0.2)), 0),
         (tone("triangle", 160, 0.3, f_end=40, vol=0.9, a=0.001, d=0.1, s=0.4, r=0.15), 0),
         (_noise(0.15, 3000, 0.4, d=0.05, s=0.3, r=0.08, seed=17), 0),
+    )
+    # Rembobinage (teaser -> début) : glissando descendant rapide + souffle de bande
+    n = n_samples(0.22)
+    bank["rewind"] = overlay(
+        (osc("square", np.geomspace(2400, 300, n), n, duty=0.25) * adsr(n, 0.005, 0.05, 0.7, 0.05) * 0.35, 0),
+        (lowpass(_noise(0.22, 9000, 0.3, d=0.05, s=0.6, r=0.05, seed=18, rate_end=2000), 2), 0),
+    )
+    # Roulement de tambour qui monte (2,4 s) pendant la révélation des scores
+    roll_len = 2.4
+    hits = []
+    t_ = 0.0
+    k = 0
+    while t_ < roll_len:
+        level = 0.35 + 0.65 * (t_ / roll_len)
+        hits.append((_noise(0.05, 7000, 0.55 * level, a=0.0005, d=0.02, s=0.3, r=0.02, seed=30 + k % 7), t_))
+        t_ += 0.075 - 0.035 * (t_ / roll_len)
+        k += 1
+    bank["drumroll"] = overlay(*hits)
+    bank["reveal_ding"] = overlay(
+        (tone("square", note("E6"), 0.25, duty=0.25, vol=0.4, a=0.001, d=0.08, s=0.4, r=0.15), 0),
+        (tone("triangle", note("E5"), 0.25, vol=0.5, r=0.15), 0),
+    )
+    bank["lead_change"] = concat(*[tone("square", note(x), 0.07, duty=0.5, vol=0.4, a=0.002, r=0.02)
+                                   for x in ("C5", "G5")], tone("square", note("C6"), 0.18, duty=0.5, vol=0.4, r=0.1))
+    bank["slowmo"] = overlay(
+        (tone("saw", 220, 0.5, f_end=55, vol=0.4, a=0.005, d=0.1, s=0.7, r=0.2), 0),
+        (lowpass(_noise(0.5, 3000, 0.3, d=0.1, s=0.5, r=0.2, seed=19, rate_end=400), 6), 0),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 

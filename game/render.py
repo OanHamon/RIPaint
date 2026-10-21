@@ -9,7 +9,8 @@ from engine8bit import font, palette
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W
 
 from . import art
-from .battle import Battle, fmt_pct
+from .battle import (END_FRAMES, LOOP_FRAMES, REVEAL_FRAMES, REWIND_FRAMES, TEASER_FRAMES, Battle,
+                     fmt_pct)
 from .items import HIT_ANIM, SPAWN_ANIM
 from .layout import WALL
 
@@ -86,6 +87,36 @@ class Renderer:
 
     def draw(self, surf: pygame.Surface, show_safe_zone: bool = False) -> None:
         b = self.b
+        if b.final is not None and b.phase == "teaser" and b.frame < TEASER_FRAMES:
+            self._teaser_look(surf, b.frame)
+        elif b.final is not None and b.settings.teaser and b.new_outro \
+                and b.frame >= b.total_frames - LOOP_FRAMES:
+            # boucle : l'écran du gagnant s'efface et laisse place à l'image d'ouverture
+            tmp = pygame.Surface((LOGICAL_W, LOGICAL_H))
+            self._draw_normal(tmp)
+            self._teaser_look(surf, 0)
+            p = (b.frame - (b.total_frames - LOOP_FRAMES) + 1) / LOOP_FRAMES
+            keep = int(LOGICAL_H * (1 - p))
+            if keep > 0:
+                surf.blit(tmp, (0, 0), (0, 0, LOGICAL_W, keep))
+                pygame.draw.line(surf, palette.WHITE, (0, keep), (LOGICAL_W - 1, keep))
+        else:
+            self._draw_normal(surf)
+            if b.final is not None and b.phase == "teaser":
+                # rembobinage : une ligne balaie l'arène finale et révèle le début de la partie
+                p = (b.frame - TEASER_FRAMES + 1) / REWIND_FRAMES
+                tmp = pygame.Surface((LOGICAL_W, LOGICAL_H))
+                self._teaser_look(tmp, 0, title=False)
+                line = int(self.L.arena_y + b.H * p)
+                surf.blit(tmp, (0, line), (0, line, LOGICAL_W, self.L.arena_y + b.H - line))
+                for k, color in enumerate((palette.WHITE, palette.SKY, palette.MAGENTA)):
+                    pygame.draw.line(surf, color, (self.L.arena_x, line + k),
+                                     (self.L.arena_x + b.W - 1, line + k))
+        if show_safe_zone:
+            self._safe_zone(surf)
+
+    def _draw_normal(self, surf: pygame.Surface) -> None:
+        b = self.b
         surf.blit(self.background, (0, 0))
         self._arena(surf)
         self._waves(surf)
@@ -98,7 +129,11 @@ class Renderer:
         self._bullets(surf)
         self._cubes(surf)
         self._particles(surf, 0)
-        if b.phase == "intro":
+        if b.flash > 0 or b.slowmo > 0:
+            self._slowmo_fx(surf)
+        if b.phase == "teaser":
+            self._hook_banner(surf)
+        elif b.phase == "intro":
             self._intro(surf)
         elif b.phase == "battle":
             self._timer(surf)
@@ -113,13 +148,11 @@ class Renderer:
         if b.shake > 0:
             dx, dy = ((1, 0), (-1, 1), (0, -1), (1, 1), (-1, 0), (0, 1))[b.frame % 6]
             surf.scroll(dx, dy)
-        if show_safe_zone:
-            self._safe_zone(surf)
 
     # ---- Arène ---------------------------------------------------------------------------
 
-    def _arena(self, surf):
-        g = self.b.grid
+    def _arena(self, surf, grid=None):
+        g = self.b.grid if grid is None else grid
         rgb = self.floor.copy()
         painted = g >= 0
         rgb[painted] = self.lut[g[painted]]
@@ -256,14 +289,14 @@ class Renderer:
 
     def _cubes(self, surf):
         b, L = self.b, self.L
-        leader = None
-        if b.phase == "battle" and len(b.counts) and b.counts.max() > 0:
-            top = b.counts.max()
-            if (b.counts == top).sum() == 1:
-                leader = int(b.counts.argmax())
+        leader = b.leader if (b.phase == "battle" and not b.scores_hidden()) else None
+        jumping = b.crown_jump is not None and b.frame - b.crown_jump[2] < 15 and leader is not None
+        waiting = b.phase in ("teaser", "intro")
         for c in sorted(b.cubes, key=lambda c: (c.size, c.idx)):
             x0, y0, _, _ = c.rect()
             x, y = L.arena_x + x0, L.arena_y + y0
+            if waiting and ((b.frame // 5) + c.idx) % 3 == 0:
+                y -= 1                                       # les cubes trépignent avant le départ
             moving = b.phase == "battle" and c.active
             look = (c.dx, c.dy) if moving else (0.0, 0.0)
             flash = c.stun > 0 and c.stun > round(b.settings.stun_duration * FPS) - 8
@@ -301,9 +334,20 @@ class Renderer:
                 icon = art.magnet_icon()
                 surf.blit(icon, (x + c.size // 2 - 1, top_y - 3))
                 top_y -= 4
-            if leader == c.idx and not c.dead:
+            if leader == c.idx and not c.dead and not jumping:
                 cr = art.crown()
                 surf.blit(cr, (x + c.size // 2 - 2, top_y - 3))
+            if waiting and b.nicknames[c.idx]:
+                font.draw(surf, b.nicknames[c.idx], x + c.size // 2, max(L.arena_y + 1, y - 10),
+                          palette.TEAMS[c.team][2], 1, "center")
+        if jumping:
+            # la couronne saute de l'ancien leader au nouveau (arc de cercle)
+            old, new, start = b.crown_jump
+            k = (b.frame - start) / 15
+            a, n = b.cubes[old], b.cubes[new]
+            x = L.arena_x + a.cx + (n.cx - a.cx) * k
+            y = L.arena_y + a.cy - a.half + (n.cy - n.half - a.cy + a.half) * k - 14 * math.sin(math.pi * k)
+            surf.blit(art.crown(), (int(x) - 2, int(y) - 6))
 
     def _lives(self, surf, c, x, y):
         """Petits points de vie sous le cube (au-dessus s'il touche le bas de l'arène)."""
@@ -408,6 +452,21 @@ class Renderer:
         y = L.scores_y
         pygame.draw.rect(surf, palette.BLACK, (x0, y, w, 7))
         pygame.draw.rect(surf, palette.GREY_DARK, (x0 + 1, y + 1, w - 2, 5))
+        if b.scores_hidden():
+            # suspense : barre brouillée et « ??% »
+            for xx in range(x0 + 1, x0 + w - 1):
+                if (xx + b.frame // 2) % 6 < 3:
+                    pygame.draw.line(surf, palette.GREY, (xx, y + 1), (xx, y + 5))
+            n = len(b.cubes)
+            slot = w / n
+            for c in b.cubes:
+                label = "??%"
+                lw = font.text_width(label) + 6
+                lx = int(x0 + slot * (c.idx + 0.5) - lw / 2)
+                art.draw_cube(surf, lx, y + 10, 5, c.team)
+                color = palette.TEAMS[c.team][2] if (b.frame // 8 + c.idx) % 2 else palette.WHITE
+                font.draw(surf, label, lx + 5, y + 9, color)
+            return
         total = b.paintable
         x = x0 + 1
         inner = w - 2
@@ -433,22 +492,129 @@ class Renderer:
 
     # ---- Phases --------------------------------------------------------------------------
 
-    def _intro(self, surf):
+    def _hook_banner(self, surf, frame=None):
         b, L = self.b, self.L
+        frame = b.frame if frame is None else frame
         bx, bw = L.arena_x - WALL, b.W + 2 * WALL          # bandeau aligné sur l'arène
         lines = font.wrap(b.hook, bw - 2)
         h = len(lines) * 10 + 2
         pygame.draw.rect(surf, palette.BLACK, (bx, L.hud_y - 1, bw, h + 1))
         pygame.draw.rect(surf, palette.YELLOW, (bx, L.hud_y - 1, bw, h + 1), 1)
-        color = palette.YELLOW_LIGHT if (b.frame // 30) % 2 == 0 else palette.WHITE
+        color = palette.YELLOW_LIGHT if (frame // 30) % 2 == 0 else palette.WHITE
         for i, line in enumerate(lines):
             font.draw(surf, line, L.center_x, L.hud_y + 1 + i * 10, color, 1, "center")
+
+    def _intro(self, surf):
+        b, L = self.b, self.L
+        self._hook_banner(surf)
         remaining = b.battle_start - b.frame
         n = math.ceil(remaining / FPS)
         age = FPS - (remaining - (n - 1) * FPS)
         scale = 7 if age < 5 else 6
         cy = L.arena_y + b.H // 2 - (7 * scale) // 2
         font.draw(surf, str(n), L.arena_x + b.W // 2, cy, palette.YELLOW_LIGHT, scale, "center")
+
+    def _teaser_look(self, surf, t, title=True):
+        """Image d'ouverture : l'arène telle qu'elle sera à la fin, scores cachés, « WHO WINS? ».
+        La dernière image de la vidéo est identique (t=0) : la vidéo boucle sans couture."""
+        b, L = self.b, self.L
+        f = b.final
+        surf.blit(self.background, (0, 0))
+        self._arena(surf, f["grid"])
+        surf.blit(self.obstacle_layer, (L.arena_x, L.arena_y))
+        for c, (cx, cy, size, dead) in sorted(zip(b.cubes, f["cubes"]), key=lambda z: (z[1][2], z[0].idx)):
+            x = L.arena_x + int(round(cx - size / 2))
+            y = L.arena_y + int(round(cy - size / 2))
+            art.draw_cube(surf, x, y, size, c.team, stunned=dead, dead=dead)
+        self._hook_banner(surf, frame=t)
+        x0, w, y = L.arena_x - WALL, b.W + 2 * WALL, L.scores_y
+        pygame.draw.rect(surf, palette.BLACK, (x0, y, w, 7))
+        pygame.draw.rect(surf, palette.GREY_DARK, (x0 + 1, y + 1, w - 2, 5))
+        slot = w / len(b.cubes)
+        for c in b.cubes:
+            lw = font.text_width("??%") + 6
+            lx = int(x0 + slot * (c.idx + 0.5) - lw / 2)
+            art.draw_cube(surf, lx, y + 10, 5, c.team)
+            font.draw(surf, "??%", lx + 5, y + 9, palette.TEAMS[c.team][2])
+        if title and (t // 8) % 2 == 0:
+            cy = L.arena_y + b.H // 2 - 26
+            pygame.draw.rect(surf, palette.BLACK, (L.arena_x + 3, cy - 4, b.W - 6, 58))
+            pygame.draw.rect(surf, palette.YELLOW, (L.arena_x + 3, cy - 4, b.W - 6, 58), 1)
+            font.draw(surf, "WHO", L.center_x, cy, palette.YELLOW_LIGHT, 3, "center")
+            font.draw(surf, "WINS?", L.center_x, cy + 26, palette.YELLOW_LIGHT, 3, "center")
+
+    def _slowmo_fx(self, surf):
+        """Ralenti : flash blanc au déclenchement puis cadre qui pulse autour de l'arène."""
+        b, L = self.b, self.L
+        if b.flash > 0:
+            over = pygame.Surface((b.W, b.H))
+            over.fill((255, 0, 255))
+            over.set_colorkey((255, 0, 255))
+            arr = pygame.surfarray.pixels3d(over)
+            xx, yy = np.meshgrid(np.arange(b.W), np.arange(b.H), indexing="ij")
+            arr[(xx + yy) % 2 == 0] = palette.WHITE
+            del arr
+            surf.blit(over, (L.arena_x, L.arena_y))
+        if b.slowmo > 0 and (b.frame // 3) % 2 == 0:
+            pygame.draw.rect(surf, palette.WHITE, (L.arena_x - WALL, L.arena_y - WALL, b.W + 2 * WALL,
+                                                   b.H + 2 * WALL), 1)
+
+    def _panel(self, surf, border, t):
+        b, L = self.b, self.L
+        px, py = L.arena_x - WALL, L.safe.top + 20
+        pw, ph_full = b.W + 2 * WALL, L.arena_y + b.H + WALL - py
+        ph = min(ph_full, 8 + t * 24)
+        pygame.draw.rect(surf, palette.BLACK, (px, py + (ph_full - ph) // 2, pw, ph))
+        pygame.draw.rect(surf, border, (px, py + (ph_full - ph) // 2, pw, ph), 1)
+        return px, py, pw, ph_full
+
+    def _reveal(self, surf, t):
+        """Révélation des scores : les barres montent une à une, du dernier au premier."""
+        b, L = self.b, self.L
+        r = b.result
+        surf.blit(self.shade, (0, 0))
+        px, py, pw, ph = self._panel(surf, palette.WHITE, t)
+        if t < 6:
+            return
+        font.draw(surf, "RESULTS", L.center_x, py + 8, palette.WHITE, 2, "center")
+        n = len(r.ranking)
+        slot = REVEAL_FRAMES / n
+        row_h = 20
+        top = py + 34 + (4 - n) * row_h // 2
+        best = max(rk.pct for rk in r.ranking) or 1.0
+        bar_x = px + 18
+        bar_w = pw - 18 - 34
+        for i, rk in enumerate(r.ranking):
+            j = n - 1 - i                                   # ordre de révélation : le dernier d'abord
+            start = j * slot
+            prog = min(1.0, max(0.0, (t - start) / (slot * 0.75)))
+            y = top + i * row_h
+            art.draw_cube(surf, px + 5, y, 9, rk.team)
+            pygame.draw.rect(surf, palette.GREY_DARK, (bar_x, y + 2, bar_w, 5))
+            w = int(bar_w * rk.pct / best * prog)
+            if w > 0:
+                _, mid, light = palette.TEAMS[rk.team]
+                pygame.draw.rect(surf, mid, (bar_x, y + 2, w, 5))
+                pygame.draw.rect(surf, light, (bar_x, y + 2, w, 1))
+            if prog >= 1.0:
+                winner_flash = i == 0 and (t // 4) % 2 == 0
+                color = palette.WHITE if winner_flash else palette.TEAMS[rk.team][2]
+                font.draw(surf, fmt_pct(rk.pct), px + pw - 2, y + 1, color, 1, "right")
+            elif t >= start:
+                font.draw(surf, "?", px + pw - 4, y + 1, palette.GREY_LIGHT, 1, "right")
+
+    def _league_table(self, surf, y, cx):
+        b = self.b
+        lg = b.league
+        font.draw(surf, f"LEAGUE DAY {lg['day']}", cx, y, palette.WHITE, 1, "center")
+        y += 11
+        winner_team = b.cubes[b.result.winner].team if b.result.winner is not None else None
+        for k, (team, wins) in enumerate(lg["standings"][:4]):
+            color = palette.TEAMS[team][2]
+            if team == winner_team and (b.frame // 6) % 2 == 0:
+                color = palette.WHITE
+            font.draw(surf, f"{k + 1}. {team} {wins}W", cx, y, color, 1, "center")
+            y += 10
 
     def _go(self, surf):
         b, L = self.b, self.L
@@ -468,16 +634,16 @@ class Renderer:
             if age % 6 < 4:
                 font.draw(surf, "END!", L.arena_x + b.W // 2, L.arena_y + b.H // 2 - 14, palette.RED, 4, "center")
             return
+        if b.new_outro and age < END_FRAMES + REVEAL_FRAMES:
+            self._reveal(surf, age - END_FRAMES)
+            return
         surf.blit(self.shade, (0, 0))
         r = b.result
-        t = age - 30
+        t = age - (END_FRAMES + REVEAL_FRAMES if b.new_outro else 30)
         # panneau noir uni (déroulé vertical rapide) pour une lisibilité parfaite
         border = palette.TEAMS[b.cubes[r.winner].team][2] if r.winner is not None else palette.WHITE
-        px, py = L.arena_x - WALL, L.safe.top + 20
-        pw, ph_full = b.W + 2 * WALL, L.arena_y + b.H + WALL - py
-        ph = min(ph_full, 8 + t * 24)
-        pygame.draw.rect(surf, palette.BLACK, (px, py + (ph_full - ph) // 2, pw, ph))
-        pygame.draw.rect(surf, border, (px, py + (ph_full - ph) // 2, pw, ph), 1)
+        self._panel(surf, border, t)
+        show_league = b.league is not None and t >= 120
         y = L.safe.top + 12
         if r.winner is not None:
             win = b.cubes[r.winner]
@@ -491,10 +657,18 @@ class Renderer:
             if t >= 8:
                 font.draw(surf, win.team, cx, y, palette.TEAMS[win.team][2], 2, "center")
             y += 18
+            nick = b.nicknames[win.idx]
+            if nick:
+                if t >= 10:
+                    font.draw(surf, f'"{nick}"', cx, y - 2, palette.TEAMS[win.team][2], 1, "center")
+                y += 9
             if t >= 14:
                 color = palette.WHITE if (t // 12) % 2 == 0 else palette.YELLOW_LIGHT
                 font.draw(surf, "WINS!", cx, y, color, 2, "center")
             y += 20
+            if show_league:
+                self._league_table(surf, y + 1, cx)
+                return
             if t >= 22:
                 font.draw(surf, fmt_pct(r.ranking[0].pct), cx, y, palette.YELLOW_LIGHT, 2, "center")
             y += 20
@@ -514,6 +688,9 @@ class Renderer:
             if t >= 8:
                 font.draw(surf, "TIE!", cx, y, palette.WHITE, 2, "center")
             y += 20
+            if show_league:
+                self._league_table(surf, y + 1, cx)
+                return
             if t >= 16:
                 font.draw(surf, fmt_pct(r.ranking[0].pct), cx, y, palette.YELLOW_LIGHT, 2, "center")
             y += 20
@@ -522,7 +699,8 @@ class Renderer:
         for k, rk in enumerate(others):
             if t >= 34 + k * 8:
                 place = r.ranking.index(rk) + 1
-                font.draw(surf, f"{place}. {rk.team} {fmt_pct(rk.pct)}", cx, y, palette.TEAMS[rk.team][2], 1, "center")
+                label = b.nicknames[rk.idx] or rk.team
+                font.draw(surf, f"{place}. {label} {fmt_pct(rk.pct)}", cx, y, palette.TEAMS[rk.team][2], 1, "center")
             y += 10
 
     def _safe_zone(self, surf):

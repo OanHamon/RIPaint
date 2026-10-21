@@ -107,8 +107,32 @@ Les vidéos sont enregistrées dans `videos/<date>_<heure>_cube-battle_seed<seed
 (+ `.srt` si l'option est cochée). Pour refaire une partie qui vous a plu, reprenez la seed du nom
 de fichier. Les réglages utilisés sont aussi inscrits dans les métadonnées du MP4.
 
-Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé + 5 s de fin
-(entre 60 et 69 s avec les réglages par défaut). Une vidéo se génère en 15 à 30 s environ.
+Déroulé d'une vidéo (réglages par défaut) :
+
+1. **Teaser (0,8 s)** : l'arène telle qu'elle sera à la fin, « WHO WINS? », puis un « rembobinage ».
+2. **Compte à rebours 3-2-1** : les cubes trépignent, leur surnom s'affiche (« SHADOW », « FROST »…).
+3. **Bataille** : allongée automatiquement pour que la vidéo dépasse toujours 1 minute (51,2 s),
+   +3 s par sablier. Annonces « X LEADS! » quand un cube prend nettement la tête, ralentis sur les
+   K.O. et explosions, pourcentages cachés (« ??% ») pendant les 5 dernières secondes.
+4. **Fin (7 s)** : « END! », révélation des scores un par un avec roulement de tambour, écran du
+   gagnant (surnom, score, puis classement de la ligue), et retour à l'image d'ouverture : la
+   dernière image est identique à la première, la vidéo boucle sans couture.
+
+Durée : 62 s minimum (68 à 71 s avec des sabliers). Une vidéo se génère en 15 à 30 s environ.
+
+### Rémunération TikTok (Creator Rewards Program)
+
+L'option « Toujours plus d'1 minute » garantit la condition de durée (vidéo > 1 minute) et tout
+le contenu est original (graphismes, police, musique et sons générés par le code). Les autres
+conditions dépendent du compte et pas des vidéos : au moins 10 000 abonnés, 100 000 vues sur
+30 jours, 18 ans, compte personnel dans un pays éligible (dont la France). Vérifiez votre
+éligibilité dans l'application (Outils pour les créateurs), les règles pouvant évoluer.
+
+### Ligue
+
+Chaque vidéo générée compte comme une journée de ligue : le gagnant marque une victoire et le
+classement s'affiche à la fin (« LEAGUE DAY 12 »). Il est stocké dans `league.json` et se remet à
+zéro depuis le panneau. L'aperçu ne compte pas.
 
 ## Réglages avancés (`config.json`)
 
@@ -122,7 +146,12 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 | `speed_ramp` | 1.8 | Multiplicateur de vitesse atteint à la fin du chrono de base |
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |
 | `safe_top` / `safe_bottom` / `safe_right` | 130 / 400 / 140 | Zones de sécurité TikTok en pixels de la vidéo finale |
-| `intro_duration` / `battle_duration` / `outro_duration` | 5 / 50 / 5 | Durées en secondes |
+| `intro_duration` / `battle_duration` / `outro_duration` | 3 / 50 / 7 | Durées en secondes (bataille allongée si besoin pour dépasser `min_video_duration`) |
+| `tiktok_rewards` / `min_video_duration` | true / 62 | Vidéo toujours plus longue que 1 minute |
+| `teaser` | true | Fin montrée en ouverture + boucle sans couture |
+| `hide_final_scores` | 5 | Secondes de fin où les % sont cachés (0 = jamais) |
+| `comeback` | 0.5 | Probabilité qu'un objet apparaisse près du cube en dernière place |
+| `lead_announce` / `slowmo` / `nicknames` / `league` | true | Annonces de leader, ralentis, surnoms, ligue |
 | `hourglass_bonus` | 3 | Secondes ajoutées par sablier |
 | `aim_duration` | 0.3 | Durée de la ligne de visée du fusil |
 | `stun_duration` / `slow_duration` / `potion_duration` | 5 / 3 / 5 | Durées des effets |

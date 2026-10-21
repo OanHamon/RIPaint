@@ -48,9 +48,19 @@ def try_spawn(b: "Battle") -> None:
     if sum(weights.values()) <= 0:
         return
     kind = b.rng.choices(ITEM_KINDS, weights=[weights[k] for k in ITEM_KINDS])[0]
-    for _ in range(80):
-        x = b.rng.randint(WALL_MARGIN, b.W - WALL_MARGIN - 1)
-        y = b.rng.randint(WALL_MARGIN, b.H - WALL_MARGIN - 1)
+    # coup de pouce : une fois sur deux (réglable), l'objet apparaît près du cube en dernière place
+    near = None
+    if s.comeback > 0 and b.rng.random() < s.comeback:
+        alive = [c for c in b.cubes if not c.dead]
+        if len(alive) >= 2:
+            near = min(alive, key=lambda c: (int(b.counts[c.idx]), c.idx))
+    for attempt in range(80):
+        if near is not None and attempt < 40:
+            x = int(min(max(near.cx + b.rng.uniform(-26, 26), WALL_MARGIN), b.W - WALL_MARGIN - 1))
+            y = int(min(max(near.cy + b.rng.uniform(-26, 26), WALL_MARGIN), b.H - WALL_MARGIN - 1))
+        else:
+            x = b.rng.randint(WALL_MARGIN, b.W - WALL_MARGIN - 1)
+            y = b.rng.randint(WALL_MARGIN, b.H - WALL_MARGIN - 1)
         item = Item(kind, x, y, b.frame)
         ix0, iy0, ix1, iy1 = item.rect()
         clear = True
@@ -322,6 +332,7 @@ def update_bombs(b: "Battle") -> None:
         b.sparkle(ax, ay, palette.WHITE, 10)
         b.shake = 12
         b.emit("explosion")
+        b.trigger_slowmo()
 
 
 # ---- Rouleau / Glace / Aimant (minuteurs par cube) ---------------------------------------
@@ -447,3 +458,4 @@ def knock_out(b: "Battle", cube: Cube) -> None:
     b.popup(f"{cube.team} K.O.!", light, anchor=anchor)
     b.emit("ko")
     b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 14)
+    b.trigger_slowmo()

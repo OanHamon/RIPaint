@@ -89,14 +89,16 @@ def test_cubes_stay_inside_and_never_stuck(seed):
 def test_duration_base_without_hourglass():
     b = run(5, only("gun"))
     assert b.hourglasses_taken == 0
-    assert b.total_frames == 60 * FPS
+    assert b.total_frames == 62 * FPS                     # toujours > 1 min (rémunération TikTok)
+    legacy = run(5, only("gun", tiktok_rewards=False, teaser=False, intro_duration=5.0, outro_duration=5.0))
+    assert legacy.total_frames == 60 * FPS
 
 
 def test_hourglass_cap_and_duration():
     s = only("hourglass", max_hourglasses=2, item_interval=2.0)
     b = run(8, s)
     assert b.hourglasses_spawned <= 2
-    assert b.total_frames == (60 + 3 * b.hourglasses_taken) * FPS
+    assert b.total_frames == (62 + 3 * b.hourglasses_taken) * FPS
 
 
 def test_zero_probabilities_no_items():
@@ -197,8 +199,9 @@ def test_countdown_and_end_sounds():
     by_name = {}
     for e in b.events:
         by_name.setdefault(e.name, []).append(e.frame)
-    assert by_name["count"] == [0, 60, 120, 180, 240]
-    assert by_name["go"] == [300]
+    s0 = b.intro_start
+    assert by_name["count"] == [s0, s0 + 60, s0 + 120]          # 3-2-1 après le teaser
+    assert by_name["go"] == [s0 + 180] == [b.battle_start]
     assert by_name["buzzer"] == [b.battle_end]
     ticks = sorted(by_name.get("tick", []) + by_name.get("tock", []))
     assert len(ticks) >= 8 and all(b.battle_end - 300 <= t < b.battle_end for t in ticks)
@@ -552,7 +555,7 @@ def test_knock_out_slides_then_stops_and_stops_painting():
         b.step()
         speeds.append(math.hypot(v.cx - before[0], v.cy - before[1]))
         assert int((b.grid == v.idx).sum()) <= painted_before     # ne peint plus
-    assert speeds[0] > 0.5                                         # glisse au début...
+    assert max(speeds[:10]) > 0.5                                  # glisse au début (après le ralenti)...
     assert speeds[-1] < 0.05                                       # ... puis s'arrête
     assert max(speeds[60:]) < max(speeds[:10])                     # en ralentissant
 

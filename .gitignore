@@ -13,3 +13,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .venv/
+
+# Ligue (classement entre vidéos)
+league.json

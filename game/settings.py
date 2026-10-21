@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 5
+CONFIG_VERSION = 6
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots"]
@@ -75,9 +75,20 @@ class Settings:
     boots_factor: float = 1.8         # multiplicateur de vitesse des bottes
 
     # Partie
-    intro_duration: float = 5.0
-    battle_duration: float = 50.0
-    outro_duration: float = 5.0
+    intro_duration: float = 3.0       # compte à rebours 3-2-1
+    battle_duration: float = 50.0     # durée minimale de bataille (allongée si besoin, voir tiktok_rewards)
+    outro_duration: float = 7.0       # FIN + révélation des scores + gagnant + retour au début (boucle)
+
+    # Rétention des spectateurs
+    teaser: bool = True               # 0,8 s de l'arène finale en ouverture, puis « rembobinage »
+    hide_final_scores: float = 5.0    # secondes de fin où les % sont cachés (« ??% ») ; 0 = jamais
+    comeback: float = 0.5             # probabilité qu'un objet apparaisse près du cube en dernière place
+    lead_announce: bool = True        # « RED LEADS! » quand le leader change
+    slowmo: bool = True               # ralenti sur les K.O. et les explosions
+    nicknames: bool = True            # surnoms des cubes (« RED BLAZE »)
+    league: bool = True               # classement des couleurs conservé d'une vidéo à l'autre
+    tiktok_rewards: bool = True       # vidéo toujours > 1 min (Creator Rewards Program)
+    min_video_duration: float = 62.0  # durée minimale visée quand tiktok_rewards est actif
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
     cube_size: int = 13
     arena_centered: bool = True       # arène centrée sur l'écran (False = ancienne mise en page)
@@ -161,6 +172,10 @@ def migrate(data: dict) -> dict:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 5:
         for key, old_default in (("cube_speed", 42.0), ("speed_ramp", 1.6), ("bullet_speed", 110.0)):
+            if data.get(key) == old_default:
+                data.pop(key)
+    if int(data.get("config_version", 1)) < 6:
+        for key, old_default in (("intro_duration", 5.0), ("outro_duration", 5.0)):
             if data.get(key) == old_default:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:

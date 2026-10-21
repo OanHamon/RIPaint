@@ -6,7 +6,7 @@ render.py) et des listes d'événements sonores et de sous-titres horodatés.
 
 import math
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -25,6 +25,19 @@ from .settings import Settings
 
 TICK_ZONE = 5 * FPS
 STUCK_CHECK = 30
+
+# Déroulé d'une vidéo (en images)
+TEASER_FRAMES = 36          # arène finale montrée en ouverture (« WHO WINS? »)
+REWIND_FRAMES = 12          # « rembobinage » vers le début de la partie
+END_FRAMES = 30             # « END! »
+REVEAL_FRAMES = 150         # révélation des scores un par un, avec roulement de tambour
+LOOP_FRAMES = 30            # retour à l'image d'ouverture (la vidéo boucle sans couture)
+SLOWMO_FRAMES = 30          # ralenti : 0,5 s de vidéo à demi-vitesse
+LEAD_COOLDOWN = 360         # au moins 6 s entre deux « X LEADS! »
+LEAD_MARGIN = 0.03          # nouvelle tête annoncée seulement avec 3 points d'avance
+LEAD_START_DELAY = 240      # pas d'annonce de leader pendant les 4 premières secondes
+NICKNAMES = ["BLAZE", "FROST", "TURBO", "NINJA", "ROCKY", "PIXEL", "COMET", "SPIKE", "BOLT", "NOVA",
+             "VIPER", "ZIGGY", "MANGO", "ROCKET", "SHADOW", "BLITZ", "LUNA", "MAX", "TANK", "DUKE"]
 
 
 @dataclass
@@ -45,7 +58,7 @@ class Result:
 
 
 class Battle:
-    def __init__(self, seed: int, settings: Settings):
+    def __init__(self, seed: int, settings: Settings, battle_frames: int | None = None):
         self.seed = seed
         self.settings = settings
         self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
@@ -87,16 +100,51 @@ class Battle:
         self.tick_parity = 0
         self.result: Result | None = None
         self.result_text = ""
+        self.slowmo = 0
+        self.flash = 0
+        self.leader: int | None = None          # leader « officiel » (porte la couronne)
+        self.last_lead_frame = -10 ** 6
+        self.crown_jump: tuple | None = None    # (ancien leader, nouveau, image) pour l'animation
+        self.lead_changes = 0
+        self.league: dict | None = None         # classement de la ligue (fourni par l'export)
+        names = random.Random(seed * 13 + 5).sample(NICKNAMES, len(self.cubes))
+        self.nicknames = names if settings.nicknames else [""] * len(self.cubes)
 
         self.frame = -1
-        self.battle_start = round(settings.intro_duration * FPS)
-        self.battle_end = self.battle_start + round(settings.battle_duration * FPS)
+        self.intro_start = (TEASER_FRAMES + REWIND_FRAMES) if settings.teaser else 0
+        self.battle_start = self.intro_start + round(settings.intro_duration * FPS)
         self.outro_frames = round(settings.outro_duration * FPS)
+        self.new_outro = self.outro_frames >= END_FRAMES + REVEAL_FRAMES + LOOP_FRAMES + 90
+        if battle_frames is None:
+            battle_frames = round(settings.battle_duration * FPS)
+            if settings.tiktok_rewards:
+                # la vidéo doit toujours dépasser 1 minute, même sans sablier
+                need = round(settings.min_video_duration * FPS) - self.battle_start - self.outro_frames
+                battle_frames = max(battle_frames, need)
+        self.base_battle_frames = battle_frames
+        self.battle_end = self.battle_start + battle_frames
         self.interval = max(1, round(settings.item_interval * FPS))
         self.next_spawn = self.battle_start + self.interval
         self.counts = np.zeros(len(self.cubes), dtype=np.int64)
 
         self.subtitle(0, self.battle_start, self.hook)
+        if settings.teaser:
+            self.subtitle(0, TEASER_FRAMES, "WHO WINS?")
+
+        # Partie simulée à l'avance (même seed, même durée) : sert au teaser d'ouverture,
+        # à la boucle de fin et à la ligue. La simulation étant déterministe et relative au GO,
+        # l'arène finale est exactement celle de la vraie partie.
+        self.final = None
+        if settings.teaser or settings.league:
+            pre = Battle(seed, replace(settings, teaser=False, league=False), battle_frames)
+            while not pre.done:
+                pre.step()
+            self.final = {
+                "grid": pre.grid.copy(),
+                "cubes": [(c.cx, c.cy, c.size, c.dead) for c in pre.cubes],
+                "result": pre.result,
+                "percentages": pre.percentages(),
+            }
 
     # ---- Utilitaires ---------------------------------------------------------------------
 
@@ -110,6 +158,8 @@ class Battle:
 
     @property
     def phase(self) -> str:
+        if self.frame < self.intro_start:
+            return "teaser"
         if self.frame < self.battle_start:
             return "intro"
         if self.frame < self.battle_end:
@@ -121,13 +171,30 @@ class Battle:
             return (self.battle_end - self.battle_start) / FPS
         return max(0.0, (self.battle_end - self.frame) / FPS)
 
+    def scores_hidden(self) -> bool:
+        """Pourcentages cachés (« ??% ») : teaser, dernières secondes et début de la fin."""
+        if self.phase == "teaser":
+            return True
+        hide = round(self.settings.hide_final_scores * FPS)
+        if hide <= 0:
+            return False
+        if self.phase == "battle":
+            return self.battle_end - self.frame <= hide
+        return self.phase == "outro"
+
+    def trigger_slowmo(self) -> None:
+        if self.settings.slowmo and self.slowmo == 0 and self.phase == "battle":
+            self.slowmo = SLOWMO_FRAMES
+            self.flash = 3
+            self.emit("slowmo")
+
     def percentages(self) -> list[float]:
         return [float(c) / self.paintable * 100 for c in self.counts]
 
     def speed_multiplier(self) -> float:
         """Accélération progressive : x1 au GO, x speed_ramp à la fin du chrono de base
         (le temps ajouté par les sabliers reste à la vitesse maximale)."""
-        base = max(1, round(self.settings.battle_duration * FPS))
+        base = max(1, self.base_battle_frames)
         t = min(1.0, max(0.0, (self.frame - self.battle_start) / base))
         return 1.0 + (self.settings.speed_ramp - 1.0) * t
 
@@ -170,17 +237,31 @@ class Battle:
     def step(self) -> None:
         self.frame += 1
         f = self.frame
-        if f < self.battle_start:
+        skip = False
+        if f < self.intro_start:
+            if f == TEASER_FRAMES:
+                self.emit("rewind")
+        elif f < self.battle_start:
             self._intro(f)
         elif f < self.battle_end:
             if f == self.battle_start:
                 self._start_battle()
-            self._battle(f)
+            if self.slowmo > 0:
+                # ralenti : la partie n'avance qu'une image sur deux (le chrono, lui, continue)
+                self.slowmo -= 1
+                skip = self.slowmo % 2 == 1
+            if skip:
+                self._ticks(f)
+            else:
+                self._battle(f)
         else:
             if self.result is None:
                 self._finish()
             self._outro(f)
-        self._update_particles()
+        if not skip:
+            self._update_particles()
+        if self.flash > 0:
+            self.flash -= 1
         if self.timer_flash > 0:
             self.timer_flash -= 1
         if self.shake > 0:
@@ -219,7 +300,7 @@ class Battle:
             item_logic.update_cube_timers(self, c)
 
         ramp = self.speed_multiplier()
-        base = round(s.battle_duration * FPS)
+        base = self.base_battle_frames
         if s.speed_ramp > 1.05 and f - self.battle_start in (base // 3, 2 * base // 3):
             self.popup("SPEED UP!", palette.WHITE, duration=72)
             self.emit("speed_up")
@@ -264,6 +345,31 @@ class Battle:
 
         self._ticks(f)
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
+        self._lead(f)
+
+    def _lead(self, f: int) -> None:
+        """Annonce « X LEADS! » quand un autre cube prend nettement la tête (pas pendant les
+        dernières secondes, où les scores sont cachés)."""
+        top = int(self.counts.max())
+        if top <= 0 or int((self.counts == top).sum()) != 1:
+            return
+        leader = int(self.counts.argmax())
+        if self.leader is None:
+            self.leader = leader
+            return
+        if leader == self.leader or self.scores_hidden() or f - self.battle_start < LEAD_START_DELAY:
+            return
+        margin = int(self.counts[leader] - self.counts[self.leader])
+        if margin < LEAD_MARGIN * self.paintable or f - self.last_lead_frame < LEAD_COOLDOWN:
+            return
+        self.crown_jump = (self.leader, leader, f)
+        self.leader = leader
+        self.last_lead_frame = f
+        self.lead_changes += 1
+        if self.settings.lead_announce:
+            c = self.cubes[leader]
+            self.popup(f"{c.team} LEADS!", palette.TEAMS[c.team][2], duration=72)
+            self.emit("lead_change")
 
     def _paint_under(self, c: Cube) -> None:
         x0, y0, x1, y1 = c.rect()
@@ -295,19 +401,32 @@ class Battle:
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
         self.result = compute_result(self.cubes, self.counts, self.paintable)
         r = self.result
+        if self.new_outro:
+            # END! -> révélation des scores (du dernier au premier, roulement de tambour) -> gagnant
+            reveal = f + END_FRAMES
+            win_at = reveal + REVEAL_FRAMES
+            self.emit("drumroll", frame=reveal)
+            slot = REVEAL_FRAMES / len(self.cubes)
+            for k in range(len(self.cubes)):
+                self.emit("reveal_ding", frame=reveal + round(slot * k + slot * 0.75))
+            self.subtitle(reveal, win_at, "RESULTS...")
+        else:
+            win_at = f + 54
         if r.winner is not None:
-            self.emit("victory", frame=f + 54)
+            self.emit("victory", frame=win_at)
             w = r.ranking[0]
             text = f"{w.team} WINS! {fmt_pct(w.pct)}"
         else:
-            self.emit("draw", frame=f + 54)
+            self.emit("draw", frame=win_at)
             text = "TIE! " + " / ".join(self.cubes[i].team for i in r.tied)
         self.result_text = text
-        self.subtitle(f + 30, self.total_frames, text)
+        self.subtitle(win_at if self.new_outro else f + 30, self.total_frames, text)
 
     def _outro(self, f: int) -> None:
         r = self.result
-        if f - self.battle_end >= 30 and f % 2 == 0:
+        start = END_FRAMES + REVEAL_FRAMES if self.new_outro else 30
+        end = self.total_frames - (LOOP_FRAMES if self.new_outro else 0)
+        if start <= f - self.battle_end and f < end and f % 2 == 0:
             colors = ([palette.TEAMS[self.cubes[r.winner].team][1], palette.TEAMS[self.cubes[r.winner].team][2],
                        palette.WHITE] if r.winner is not None else [palette.GREY_LIGHT, palette.WHITE])
             x = self.fx.uniform(self.layout.safe_x0, self.layout.safe_x1)

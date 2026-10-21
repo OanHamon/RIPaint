@@ -13,6 +13,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from game import league
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
@@ -69,7 +70,7 @@ class ControlPanel:
 
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
-        box.grid(row=0, column=1, rowspan=9, sticky="new", **pad)
+        box.grid(row=0, column=1, rowspan=2, sticky="new", **pad)
         self.prob_vars, self.pct_labels = {}, {}
         for r, kind in enumerate(ITEM_KINDS):
             var = tk.DoubleVar(value=getattr(self.s, f"prob_{kind}"))
@@ -81,6 +82,32 @@ class ControlPanel:
             lbl.grid(row=r, column=2, sticky="w")
             self.pct_labels[kind] = lbl
             var.trace_add("write", lambda *_: self.on_change())
+
+        # --- Rétention des spectateurs ---
+        box = ttk.LabelFrame(main, text="Rétention (faire regarder jusqu'au bout)", padding=8)
+        box.grid(row=2, column=1, rowspan=7, sticky="new", **pad)
+        self.flags = {}
+        options = [
+            ("tiktok_rewards", "Toujours plus d'1 minute (rémunération TikTok)"),
+            ("teaser", "Teaser : la fin montrée en ouverture, puis rembobinage"),
+            ("hide_scores", "Cacher les % pendant les 5 dernières secondes"),
+            ("comeback", "Coup de pouce au dernier (objets près de lui)"),
+            ("lead_announce", "Annoncer les changements de leader"),
+            ("slowmo", "Ralenti sur les K.O. et les explosions"),
+            ("nicknames", "Surnoms des cubes (RED BLAZE…)"),
+            ("league", "Ligue : classement des couleurs entre les vidéos"),
+        ]
+        values = {"hide_scores": self.s.hide_final_scores > 0, "comeback": self.s.comeback > 0}
+        for r, (key, label) in enumerate(options):
+            var = tk.BooleanVar(value=values.get(key, getattr(self.s, key, True)))
+            self.flags[key] = var
+            ttk.Checkbutton(box, text=label, variable=var, command=self.on_change).grid(
+                row=r, column=0, columnspan=2, sticky="w")
+        self.league_label = ttk.Label(box, foreground="#666")
+        self.league_label.grid(row=len(options), column=0, sticky="w", pady=(4, 0))
+        ttk.Button(box, text="Remettre la ligue à zéro", command=self.reset_league).grid(
+            row=len(options), column=1, sticky="e", pady=(4, 0))
+        self._refresh_league()
 
         # --- Apparition ---
         box = ttk.LabelFrame(main, text="Apparition des objets", padding=8)
@@ -175,6 +202,15 @@ class ControlPanel:
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
+        f = {k: bool(v.get()) for k, v in self.flags.items()}
+        s.tiktok_rewards = f["tiktok_rewards"]
+        s.teaser = f["teaser"]
+        s.hide_final_scores = 5.0 if f["hide_scores"] else 0.0
+        s.comeback = 0.5 if f["comeback"] else 0.0
+        s.lead_announce = f["lead_announce"]
+        s.slowmo = f["slowmo"]
+        s.nicknames = f["nicknames"]
+        s.league = f["league"]
         s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
         s.speed_ramp = round(min(3.0, max(1.0, float(self._get(self.speed_ramp, s.speed_ramp)))), 2)
@@ -286,6 +322,7 @@ class ControlPanel:
         self.btn_generate.config(state="normal")
         self.btn_cancel.config(state="disabled")
         n = len(self.done_paths)
+        self._refresh_league()
         if cancelled:
             self.status.config(text=f"Génération annulée ({n} vidéo(s) terminée(s)).")
         elif self.errors:
@@ -293,6 +330,19 @@ class ControlPanel:
         else:
             self.progress["value"] = 100
             self.status.config(text=f"Terminé : {n} vidéo(s) dans le dossier « {self.s.output_dir} ».")
+
+    def _refresh_league(self):
+        data = league.load()
+        if data["day"] == 0:
+            self.league_label.config(text="Ligue : aucune journée jouée")
+        else:
+            team, wins = league.standings(data)[0]
+            self.league_label.config(text=f"Ligue : jour {data['day']}, en tête {team} ({wins} V)")
+
+    def reset_league(self):
+        if messagebox.askyesno("Ligue", "Remettre le classement de la ligue à zéro (jour 0) ?"):
+            league.reset()
+            self._refresh_league()
 
     def cancel(self):
         if self.proc is not None:
