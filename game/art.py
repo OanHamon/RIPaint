@@ -160,6 +160,18 @@ BOOTS = (
     "..KKKKKKK",
 )
 
+HEART = (
+    ".KK...KK.",
+    "KRRK.KRRK",
+    "KRWRKRRRK",
+    "KRWRRRRRK",
+    "KRRRRRRRK",
+    ".KRRRRRK.",
+    "..KRRRK..",
+    "...KRK...",
+    "....K....",
+)
+
 MINI_ROLLER = (
     "KKKKK",
     "KWWWK",
@@ -175,7 +187,7 @@ MINI_MAGNET = (
 
 ITEM_SPRITES = {"gun": GUN, "brush": BRUSH, "potion": POTION, "hourglass": HOURGLASS, "bomb": BOMB,
                 "roller": ROLLER, "bucket": BUCKET, "ice": ICE, "magnet": MAGNET,
-                "boots": BOOTS}
+                "boots": BOOTS, "heart": HEART}
 
 
 def item_sprite(kind: str) -> pygame.Surface:
@@ -208,7 +220,9 @@ def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(
     """Cube 8-bit : contour noir, corps clair, ombre foncée, reflet, yeux qui regardent
     dans la direction du mouvement (croix si assommé)."""
     dark, mid, light = palette.TEAMS[team]
-    body = palette.WHITE if flash else (mid if dead else light)   # K.O. : corps plus terne
+    if dead:                                        # K.O. : cube grisé
+        dark, mid, light = palette.GREY_DARK, palette.GREY, palette.GREY_LIGHT
+    body = palette.WHITE if flash else (mid if dead else light)
     pygame.draw.rect(surf, K, (x, y, size, size))
     if size <= 2:
         return

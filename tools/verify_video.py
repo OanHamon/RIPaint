@@ -86,12 +86,19 @@ def expected_frames(meta: dict) -> tuple[int, int]:
         data.setdefault(f"prob_{kind}", 0)
     data.setdefault("speed_ramp", 1.0)     # pas d'accélération progressive avant cette option
     data.setdefault("obstacles", 0)        # pas d'obstacles avant cette option
+    data.setdefault("map", "generated")    # avant les cartes : obstacles placés au hasard
+    data.setdefault("escalation", False)   # avant le mode escalade
+    data.setdefault("death_shrink", False) # avant les cubes K.O. qui rapetissent
+    data.setdefault("duel_lives", 0)       # avant : même nombre de vies en duel
     data.setdefault("arena_centered", False)   # ancienne mise en page (arène dans la zone sûre)
     data.setdefault("lives", 0)                # pas de vies avant cette option
+    for key, legacy in (("teaser", False), ("tiktok_rewards", False), ("comeback", 0.0), ("slowmo", False),
+                        ("league", False)):
+        data.setdefault(key, legacy)           # options de rétention absentes des anciennes vidéos
     b = Battle(int(meta["seed"]), Settings.from_dict(data))
     while not b.done:
         b.step()
-    return b.total_frames, b.hourglasses_taken
+    return b.total_frames, b.hourglasses_taken, b.battle_start
 
 
 def onset(audio: np.ndarray, t0: float, t1: float) -> float:
@@ -122,12 +129,14 @@ def verify(path: Path) -> dict:
 
     meta = info.get("meta")
     if meta:
-        exp, hg = expected_frames(meta)
+        exp, hg, go_frame_expected = expected_frames(meta)
         r["expected_duration"] = exp / FPS
         r["hourglasses"] = hg
         r["seed"] = meta["seed"]
-        intro = meta["settings"]["intro_duration"]
-        c[f"durée attendue ({exp / FPS:.0f} s = 60 s + {hg} sablier(s))"] = frames == exp
+        intro = go_frame_expected / FPS                # instant du « GO » (après teaser + 3-2-1)
+        c[f"durée attendue ({exp / FPS:.0f} s, dont {hg} sablier(s))"] = frames == exp
+        if meta["settings"].get("tiktok_rewards"):
+            c["plus d'une minute (rémunération TikTok)"] = vdur > 60.0
     else:
         intro = 5.0
         c["métadonnées présentes"] = False

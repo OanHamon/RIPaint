@@ -25,6 +25,9 @@ class Cube:
     dead: bool = False       # K.O. : glisse en ralentissant, ne peint plus, ne ramasse plus
     invuln: int = 0          # images d'invulnérabilité après avoir perdu une vie
     life_lost: int = 0       # images restantes du clignotement de la vie perdue
+    life_gained: int = 0     # images restantes du clignotement de la vie gagnée (cœur)
+    death_anim: int = 0      # images écoulées depuis le K.O. (grisé + rapetissement)
+    death_from: int = 0      # taille au moment du K.O.
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0
@@ -121,6 +124,17 @@ class Wave:
     half: float              # demi-épaisseur
     dist: float = 0.0        # distance parcourue de chaque côté
     hit: set = field(default_factory=set)
+
+
+@dataclass
+class Slash:
+    """Trait de coup (blanc cerclé de noir) affiché quelques images sur un impact."""
+    x: float                 # centre, coordonnées d'arène
+    y: float
+    angle: float
+    length: float
+    start: int
+    life: int
 
 
 @dataclass

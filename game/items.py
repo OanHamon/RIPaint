@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from engine8bit import palette
 
 from . import physics
-from .entities import Aim, Bomb, Bullet, Cube, Item, Swipe, Wave
+from .entities import Aim, Bomb, Bullet, Cube, Item, Slash, Swipe, Wave
 from .settings import ITEM_KINDS
 
 if TYPE_CHECKING:
@@ -20,7 +20,9 @@ WALL_MARGIN = 9            # distance minimale au mur (centre de l'objet)
 # Textes affichés dans la vidéo (en anglais)
 ITEM_NAMES = {"gun": "GUN", "brush": "BRUSH", "potion": "POTION", "hourglass": "TIMER",
               "bomb": "BOMB", "roller": "ROLLER", "bucket": "RAINBOW", "ice": "ICE", "magnet": "MAGNET",
-              "boots": "BOOTS"}
+              "boots": "BOOTS", "heart": "+1 LIFE"}
+DEATH_SHRINK = 30          # durée du rapetissement d'un cube K.O.
+DEATH_SCALE = 0.6          # taille finale d'un cube K.O. (60 %)
 BOMB_KNOCKBACK = 190.0
 WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
@@ -40,17 +42,29 @@ def nearest_opponent(b: "Battle", cube: Cube) -> Cube | None:
 
 def try_spawn(b: "Battle") -> None:
     s = b.settings
-    if len(b.items) >= s.max_items:
+    if len(b.items) >= b.max_items_now():
         return
     weights = s.item_weights()
     if b.hourglasses_spawned >= s.max_hourglasses:
         weights["hourglass"] = 0.0
+    if s.lives <= 0:
+        weights["heart"] = 0.0                       # pas de vies : pas de cœurs
     if sum(weights.values()) <= 0:
         return
     kind = b.rng.choices(ITEM_KINDS, weights=[weights[k] for k in ITEM_KINDS])[0]
-    for _ in range(80):
-        x = b.rng.randint(WALL_MARGIN, b.W - WALL_MARGIN - 1)
-        y = b.rng.randint(WALL_MARGIN, b.H - WALL_MARGIN - 1)
+    # coup de pouce : une fois sur deux (réglable), l'objet apparaît près du cube en dernière place
+    near = None
+    if s.comeback > 0 and b.rng.random() < s.comeback:
+        alive = [c for c in b.cubes if not c.dead]
+        if len(alive) >= 2:
+            near = min(alive, key=lambda c: (int(b.counts[c.idx]), c.idx))
+    for attempt in range(80):
+        if near is not None and attempt < 40:
+            x = int(min(max(near.cx + b.rng.uniform(-26, 26), WALL_MARGIN), b.W - WALL_MARGIN - 1))
+            y = int(min(max(near.cy + b.rng.uniform(-26, 26), WALL_MARGIN), b.H - WALL_MARGIN - 1))
+        else:
+            x = b.rng.randint(WALL_MARGIN, b.W - WALL_MARGIN - 1)
+            y = b.rng.randint(WALL_MARGIN, b.H - WALL_MARGIN - 1)
         item = Item(kind, x, y, b.frame)
         ix0, iy0, ix1, iy1 = item.rect()
         clear = True
@@ -149,6 +163,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
                 c.frozen = frames
                 c.kb_x = c.kb_y = 0.0
                 c.hit_anim = HIT_ANIM
+                impact(b, c, c.cx - cube.cx, c.cy - cube.cy)
                 damage(b, c, can_ko=False)   # la glace touche tout le monde : elle ne peut pas achever
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.SKY, 10)
         b.emit("freeze")
@@ -157,6 +172,11 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
         b.emit("magnet")
     elif item.kind == "boots":
         cube.boots = round(s.boots_duration * 60)
+    elif item.kind == "heart":
+        if s.lives > 0 and cube.lives < b.start_lives + s.max_bonus_lives:
+            cube.lives += 1
+            cube.life_gained = 50
+        b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy - cube.half, palette.RED_LIGHT, 10)
 
 
 def start_resize(cube: Cube, new_size: int) -> None:
@@ -166,6 +186,8 @@ def start_resize(cube: Cube, new_size: int) -> None:
 
 
 def update_resize(b: "Battle", cube: Cube) -> None:
+    if cube.dead and b.settings.death_shrink:
+        return
     if cube.potion > 0:
         cube.potion -= 1
         if cube.potion == 0 and cube.big:
@@ -199,7 +221,7 @@ def update_aims(b: "Battle") -> None:
 
 
 def update_bullets(b: "Battle") -> None:
-    speed = b.settings.bullet_speed / 60
+    speed = b.settings.bullet_speed * (1 + 0.5 * b.intensity()) / 60
     steps = max(1, math.ceil(speed / 0.5))
     step = speed / steps
     for bullet in b.bullets:
@@ -236,6 +258,7 @@ def update_bullets(b: "Battle") -> None:
                 hit.stun = round(b.settings.stun_duration * 60)
                 hit.kb_x = hit.kb_y = 0.0
                 hit.hit_anim = HIT_ANIM
+                impact(b, hit, bullet.dx, bullet.dy)
                 b.emit("bullet_hit")
                 hit.kb_x, hit.kb_y = bullet.dx * 50, bullet.dy * 50
                 damage(b, hit)
@@ -280,6 +303,7 @@ def update_swipes(b: "Battle") -> None:
                 c.kb_x, c.kb_y = kx * KNOCKBACK_SPEED, ky * KNOCKBACK_SPEED
                 c.slow = round(s.slow_duration * 60)
                 c.hit_anim = HIT_ANIM
+                impact(b, c, kx, ky)
                 damage(b, c)
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
@@ -316,12 +340,14 @@ def update_bombs(b: "Battle") -> None:
                     kx, ky = math.cos(a), math.sin(a)
                 c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
                 c.hit_anim = HIT_ANIM
+                impact(b, c, kx, ky)
                 damage(b, c)
         ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
         b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
         b.sparkle(ax, ay, palette.WHITE, 10)
         b.shake = 12
         b.emit("explosion")
+        b.trigger_slowmo()
 
 
 # ---- Rouleau / Glace / Aimant (minuteurs par cube) ---------------------------------------
@@ -344,6 +370,14 @@ def update_cube_timers(b: "Battle", cube: Cube) -> None:
         cube.invuln -= 1
     if cube.life_lost > 0:
         cube.life_lost -= 1
+    if cube.life_gained > 0:
+        cube.life_gained -= 1
+    if cube.dead and b.settings.death_shrink and cube.death_anim < DEATH_SHRINK:
+        # K.O. : le cube rapetisse progressivement (et grisé, voir le rendu)
+        cube.death_anim += 1
+        k = cube.death_anim / DEATH_SHRINK
+        target = max(5, round(cube.death_from * DEATH_SCALE))
+        cube.size = round(cube.death_from + (target - cube.death_from) * k)
     if cube.boots > 0:
         cube.boots -= 1
         if cube.boots == 0:
@@ -408,6 +442,7 @@ def update_waves(b: "Battle") -> None:
             if abs(across - w.band) <= w.half + c.half and abs(along - w.origin) <= d1 + c.half:
                 w.hit.add(c.idx)
                 c.hit_anim = HIT_ANIM
+                impact(b, c, *((1.0, 0.0) if w.horizontal else (0.0, 1.0)))
                 b.emit("splat", gain=0.6)
                 damage(b, c)                      # la vague retire aussi une vie
         if w.origin - d1 <= 0 and w.origin + d1 >= length:
@@ -441,9 +476,35 @@ def knock_out(b: "Battle", cube: Cube) -> None:
     cube.kb_y += cube.dy * v
     cube.dead = True
     cube.stun = cube.frozen = cube.slow = cube.boots = cube.roller = cube.magnet = 0
+    if s.death_shrink:
+        cube.potion = cube.resize_anim = 0
+        cube.big = False
+        cube.death_anim = 0
+        cube.death_from = cube.size
     b.aims = [a for a in b.aims if a.shooter != cube.idx and a.target != cube.idx]
     light = palette.TEAMS[cube.team][2]
     anchor = "bottom" if cube.cy < b.H / 2 else "top"
     b.popup(f"{cube.team} K.O.!", light, anchor=anchor)
     b.emit("ko")
     b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 14)
+    b.trigger_slowmo()
+
+
+# ---- Mode escalade : effets d'impact ----------------------------------------------------------
+
+def impact(b: "Battle", cube: Cube, dx: float, dy: float) -> None:
+    """Coup reçu : traits de slash blancs/noirs, secousse et images d'impact noir et blanc,
+    d'autant plus marqués que la partie avance (mode escalade uniquement)."""
+    if not b.settings.escalation:
+        return
+    i = b.intensity()
+    base = math.atan2(dy, dx) if (dx or dy) else b.fx.uniform(0, math.pi)
+    n = 1 + round(2 * i)
+    for k in range(n):
+        angle = base + math.pi / 2 + (k - (n - 1) / 2) * 0.5 + b.fx.uniform(-0.25, 0.25)
+        b.slashes.append(Slash(cube.cx, cube.cy, angle, 16 + 30 * i, b.frame, 7 + round(5 * i)))
+    if i > 0.2:
+        b.impact = max(b.impact, 2 + round(2 * i))     # 1 à 3 images visibles, façon manga
+    b.shake = max(b.shake, round(4 + 10 * i))
+    b.shake_amp = max(b.shake_amp, 1 + round(2 * i))
+    b.emit("slash", gain=0.5 + 0.5 * i)

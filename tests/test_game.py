@@ -89,14 +89,16 @@ def test_cubes_stay_inside_and_never_stuck(seed):
 def test_duration_base_without_hourglass():
     b = run(5, only("gun"))
     assert b.hourglasses_taken == 0
-    assert b.total_frames == 60 * FPS
+    assert b.total_frames == 62 * FPS                     # toujours > 1 min (rémunération TikTok)
+    legacy = run(5, only("gun", tiktok_rewards=False, teaser=False, intro_duration=5.0, outro_duration=5.0))
+    assert legacy.total_frames == 60 * FPS
 
 
 def test_hourglass_cap_and_duration():
     s = only("hourglass", max_hourglasses=2, item_interval=2.0)
     b = run(8, s)
     assert b.hourglasses_spawned <= 2
-    assert b.total_frames == (60 + 3 * b.hourglasses_taken) * FPS
+    assert b.total_frames == (62 + 3 * b.hourglasses_taken) * FPS
 
 
 def test_zero_probabilities_no_items():
@@ -114,8 +116,10 @@ def test_zero_probability_item_never_spawns():
 
 
 def test_max_items_respected():
-    s = Settings(item_interval=0.5, max_items=3)
+    s = Settings(item_interval=0.5, max_items=3, escalation=False)
     run(13, s, check=lambda b: (len(b.items) <= 3) or pytest.fail("trop d'objets"))
+    s = Settings(item_interval=0.5, max_items=3)                       # escalade : jusqu'à 3 de plus
+    run(13, s, check=lambda b: (len(b.items) <= b.max_items_now() <= 6) or pytest.fail("trop d'objets"))
 
 
 def test_items_not_spawned_on_cubes_or_walls():
@@ -197,8 +201,9 @@ def test_countdown_and_end_sounds():
     by_name = {}
     for e in b.events:
         by_name.setdefault(e.name, []).append(e.frame)
-    assert by_name["count"] == [0, 60, 120, 180, 240]
-    assert by_name["go"] == [300]
+    s0 = b.intro_start
+    assert by_name["count"] == [s0, s0 + 60, s0 + 120]          # 3-2-1 après le teaser
+    assert by_name["go"] == [s0 + 180] == [b.battle_start]
     assert by_name["buzzer"] == [b.battle_end]
     ticks = sorted(by_name.get("tick", []) + by_name.get("tock", []))
     assert len(ticks) >= 8 and all(b.battle_end - 300 <= t < b.battle_end for t in ticks)
@@ -455,7 +460,7 @@ def test_bullet_still_faster_than_fastest_cube():
 def test_obstacles_count_symmetry_and_corridors(count):
     from game.physics import OBSTACLE
     for seed in range(20):
-        b = Battle(seed, Settings(obstacles=count))
+        b = Battle(seed, Settings(obstacles=count, map="generated"))
         assert len(b.obstacles) <= count
         if count <= 3:
             assert len(b.obstacles) == count
@@ -473,7 +478,7 @@ def test_obstacles_count_symmetry_and_corridors(count):
 
 
 def test_no_obstacles_means_same_game_as_before():
-    a = run(321, Settings(obstacles=0))
+    a = run(321, Settings(obstacles=0, map="generated"))
     assert a.obstacles == [] and a.paintable == a.W * a.H
 
 
@@ -517,7 +522,7 @@ def test_obstacles_option_saved_from_settings():
 # ---- Vies et K.O. ----------------------------------------------------------------------
 
 def _two_cubes(lives=3, seed=120):
-    b = Battle(seed, only("gun", item_interval=999, lives=lives, obstacles=0, players=2))
+    b = Battle(seed, only("gun", item_interval=999, lives=lives, duel_lives=lives, obstacles=0, players=2))
     while b.frame < b.battle_start + 5:
         b.step()
     return b, b.cubes[0], b.cubes[1]
@@ -552,7 +557,7 @@ def test_knock_out_slides_then_stops_and_stops_painting():
         b.step()
         speeds.append(math.hypot(v.cx - before[0], v.cy - before[1]))
         assert int((b.grid == v.idx).sum()) <= painted_before     # ne peint plus
-    assert speeds[0] > 0.5                                         # glisse au début...
+    assert max(speeds[:10]) > 0.5                                  # glisse au début (après le ralenti)...
     assert speeds[-1] < 0.05                                       # ... puis s'arrête
     assert max(speeds[60:]) < max(speeds[:10])                     # en ralentissant
 
@@ -704,11 +709,93 @@ def test_item_ramp_speeds_up_drops_until_end_of_timer():
     assert all(x >= y for x, y in zip(gaps, gaps[1:]))
 
 
-@pytest.mark.parametrize("mode", modes.MODES, ids=lambda m: m.key)
-def test_mode_sets_duration_speed_and_drop_rhythm(mode):
-    b = Battle(3, Settings(mode=mode.key, battle_duration=99, speed_ramp=1.0, item_interval=9, item_ramp=1.0))
-    for key in ("battle_duration", "speed_ramp", "item_interval", "item_ramp"):
+@pytest.mark.parametrize("mode", [m for m in modes.MODES if m.key != "escalation"], ids=lambda m: m.key)
+def test_mode_sets_speed_and_drop_rhythm_and_video_stays_over_a_minute(mode):
+    b = Battle(3, Settings(mode=mode.key, battle_duration=20, speed_ramp=1.0, item_interval=9, item_ramp=1.0))
+    for key in ("speed_ramp", "item_interval", "item_ramp"):
         assert key in mode.overrides
-    assert b.battle_end - b.battle_start == round(mode.overrides["battle_duration"] * FPS)
     assert b.interval == round(mode.overrides["item_interval"] * FPS)
+    assert b.total_frames >= 62 * FPS                     # la règle des > 1 min prime sur le mode
+    if "battle_duration" in mode.overrides:
+        assert b.base_battle_frames == round(mode.overrides["battle_duration"] * FPS)
     assert "s · vitesse ×" in modes.summary(b.settings)
+
+
+def test_escalation_is_only_a_mode():
+    assert not Settings().escalation
+    for m in modes.MODES:
+        assert Battle(3, Settings(mode=m.key, escalation=True)).settings.escalation == (m.key == "escalation")
+    b = Battle(3, Settings(mode="escalation"))
+    b.frame = b.battle_start + b.base_battle_frames
+    assert b.spawn_interval_now() == max(45, round(b.interval * 0.28))
+    assert b.max_items_now() == b.settings.max_items + 3
+
+
+def test_sudden_death_keeps_one_life_in_duel():
+    b = Battle(3, Settings(mode="suddendeath", players=2))
+    assert b.start_lives == 1 and all(c.lives == 1 for c in b.cubes)
+
+# ---- Cœur et cube K.O. qui rapetisse --------------------------------------------------------
+
+def test_heart_gives_one_life_with_a_cap():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    v.lives = 2
+    items.pickup(b, v, Item("heart", v.cx, v.cy, 0))
+    assert v.lives == 3 and v.life_gained > 0
+    assert any(e.name == "pickup_heart" for e in b.events)
+    assert any(t.endswith("+1 LIFE!") for _, _, t in b.subtitles)
+    for _ in range(5):
+        items.pickup(b, v, Item("heart", v.cx, v.cy, 0))
+    assert v.lives == 3 + b.settings.max_bonus_lives          # plafond : 2 vies bonus
+
+
+def test_no_hearts_without_lives():
+    b = run(140, only("heart", item_interval=1.0, lives=0))
+    assert not any(e.name == "spawn" for e in b.events)
+
+
+def test_dead_cube_greys_and_shrinks():
+    from game import items
+    b, a, v = _two_cubes()
+    size0 = v.size
+    v.lives = 1
+    items.damage(b, v)
+    assert v.dead
+    for _ in range(60):
+        b.step()
+    assert v.size == round(size0 * items.DEATH_SCALE)
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    r.draw(surf)
+    x0, y0, x1, y1 = v.rect()
+    px = surf.get_at((b.layout.arena_x + x0 + 2, b.layout.arena_y + y1 - 3))[:3]
+    from engine8bit import palette
+    assert px in (palette.GREY, palette.GREY_LIGHT, palette.GREY_DARK, palette.BLACK)
+
+
+def test_dead_big_cube_shrinks_from_potion_size():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    items.pickup(b, v, Item("potion", v.cx, v.cy, 0))
+    for _ in range(30):
+        b.step()
+    assert v.big and v.size == 2 * v.base_size
+    v.lives = 1
+    v.invuln = 0
+    items.damage(b, v)
+    for _ in range(60):
+        b.step()
+    assert v.dead and not v.big and v.size == round(2 * v.base_size * items.DEATH_SCALE)
+
+
+
+def test_duel_gets_more_lives():
+    duel = Battle(150, Settings(players=2))
+    assert duel.start_lives == 4 and all(c.lives == 4 for c in duel.cubes)
+    trio = Battle(150, Settings(players=3))
+    assert trio.start_lives == 3 and all(c.lives == 3 for c in trio.cubes)
+    assert Battle(150, Settings(players=2, duel_lives=5)).start_lives == 5
+    assert Battle(150, Settings(players=2, lives=0)).start_lives == 0       # vies désactivées

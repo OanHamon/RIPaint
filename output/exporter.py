@@ -23,7 +23,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
-from game import modes
+from game import league, modes
 from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
@@ -123,6 +123,13 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
 
     temp_files: list[Path] = []
     battle = Battle(seed, settings)
+    # ligue : le résultat est connu d'avance (partie pré-simulée), on affiche le classement à jour
+    new_league = None
+    if settings.league and battle.final is not None:
+        r = battle.final["result"]
+        winner = battle.cubes[r.winner].team if r.winner is not None else None
+        new_league = league.with_result(league.load(), winner)
+        battle.league = {"day": new_league["day"], "standings": league.standings(new_league)}
     renderer = Renderer(battle)
     surf = pygame.Surface((LOGICAL_W, LOGICAL_H))
 
@@ -177,6 +184,8 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         summary = battle.result_text
         meta = {"seed": seed, "generator": "cube_battle", "result": summary,
                 "mode": mode.key if mode else modes.CLASSIC, "settings": battle.settings.to_dict()}
+        if new_league is not None:
+            meta["league_day"] = new_league["day"]
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
               "-i", str(tmp_video), "-i", str(tmp_aac),
               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
@@ -185,6 +194,8 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
               "-metadata", "comment=" + json.dumps(meta, ensure_ascii=False),
               str(final)], err_log)
 
+        if new_league is not None:
+            league.save(new_league)            # seulement une fois la vidéo réussie
         srt_path = None
         if settings.export_srt:
             srt_path = final.with_suffix(".srt")

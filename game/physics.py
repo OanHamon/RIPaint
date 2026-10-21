@@ -146,8 +146,8 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4,
                 if ox <= 1e-6 or oy <= 1e-6:
                     continue
                 any_overlap = True
-                wa = 0.0 if a.immobile else 1.0
-                wb = 0.0 if b.immobile else 1.0
+                wa = 0.0 if (a.immobile and not a.dead) else 1.0
+                wb = 0.0 if (b.immobile and not b.dead) else 1.0
                 if wa + wb == 0:
                     wa = wb = 1.0
                 sa = wa / (wa + wb)
@@ -159,6 +159,10 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4,
                         a.dx = s * abs(a.dx)
                     if not b.immobile:
                         b.dx = -s * abs(b.dx)
+                    if a.dead:                       # la glissade rebondit et s'amortit
+                        a.kb_x = s * abs(a.kb_x) * 0.5
+                    if b.dead:
+                        b.kb_x = -s * abs(b.kb_x) * 0.5
                 else:
                     s = -1.0 if (a.cy, a.idx) < (b.cy, b.idx) else 1.0
                     a.cy += s * oy * sa
@@ -167,6 +171,10 @@ def resolve_collisions(cubes: list[Cube], w: int, h: int, iterations: int = 4,
                         a.dy = s * abs(a.dy)
                     if not b.immobile:
                         b.dy = -s * abs(b.dy)
+                    if a.dead:
+                        a.kb_y = s * abs(a.kb_y) * 0.5
+                    if b.dead:
+                        b.kb_y = -s * abs(b.kb_y) * 0.5
                 if (i, j) not in collided:
                     collided.append((i, j))
         for c in cubes:

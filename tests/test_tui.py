@@ -57,7 +57,7 @@ def test_boot_and_edit_settings(config, size):
             screen.query_one("#mode").action_nudge(2)           # classique -> aléatoire -> kaboom
             await pilot.pause(0.6)          # enregistrement différé
             # le mode impose ses probabilités : les notes l'indiquent, les curseurs ne bougent pas
-            assert screen.query_one("#prob_bomb", PixelSlider).note == " 60.0 % mode"
+            assert screen.query_one("#prob_bomb", PixelSlider).note == " 55.0 % mode"
             assert screen.query_one("#prob_brush", PixelSlider).note == "jamais"
             assert screen.query_one("#prob_gun", PixelSlider).value == 17
             await pilot.press("q")

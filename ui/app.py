@@ -24,6 +24,7 @@ from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, RichLog, Static
 
 from game import modes
+from game.battle import video_seconds
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
@@ -571,9 +572,8 @@ class MainScreen(Screen):
 
         # durée selon le mode (aléatoire : du mode le plus court au plus long)
         variants = [modes.apply(s, m) for m in modes.MODES] if s.mode == modes.RANDOM else [shown]
-        base = min(v.intro_duration + v.battle_duration + v.outro_duration for v in variants)
-        longest = max(v.intro_duration + v.battle_duration + v.outro_duration + v.max_hourglasses * v.hourglass_bonus
-                      for v in variants)
+        spans = [video_seconds(v) for v in variants]
+        base, longest = round(min(a for a, _ in spans)), round(max(b for _, b in spans))
         duration = f"{base:g} s" if longest == base else f"{base:g} – {longest:g} s"
         files = ".mp4 + .srt" if s.export_srt else ".mp4"
         info = Text()
