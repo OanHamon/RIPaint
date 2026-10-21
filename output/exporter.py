@@ -23,6 +23,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
+from game import modes
 from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
@@ -46,6 +47,7 @@ class ExportResult:
     hourglasses: int
     summary: str
     srt_path: Path | None = None
+    mode: str = ""                  # nom du mode de jeu ("" = classique)
 
 
 def ffmpeg_exe() -> str:
@@ -112,7 +114,9 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     out_dir = out_dir or output_dir(settings)
     # date de création en tête du nom : les vidéos se trient naturellement par date
     stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    final = out_dir / f"{stamp}_cube-battle_seed{seed}.mp4"
+    mode = modes.resolve(seed, settings)
+    tag = f"_{mode.key}" if mode else ""
+    final = out_dir / f"{stamp}_cube-battle{tag}_seed{seed}.mp4"
     tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
@@ -171,7 +175,8 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
             gain *= AAC_CEILING / peak * 0.98
 
         summary = battle.result_text
-        meta = {"seed": seed, "generator": "cube_battle", "result": summary, "settings": settings.to_dict()}
+        meta = {"seed": seed, "generator": "cube_battle", "result": summary,
+                "mode": mode.key if mode else modes.CLASSIC, "settings": battle.settings.to_dict()}
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
               "-i", str(tmp_video), "-i", str(tmp_aac),
               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
@@ -187,7 +192,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         if progress:
             progress(total, total)
         return ExportResult(final, seed, total, total / FPS, len(battle.cubes), battle.hourglasses_taken,
-                            summary, srt_path)
+                            summary, srt_path, mode.name if mode else "")
     finally:
         for p in (tmp_video, tmp_audio, err_log, *temp_files):
             try:

@@ -449,6 +449,12 @@ class Renderer:
         scale = 7 if age < 5 else 6
         cy = L.arena_y + b.H // 2 - (7 * scale) // 2
         font.draw(surf, str(n), L.arena_x + b.W // 2, cy, palette.YELLOW_LIGHT, scale, "center")
+        if b.mode is not None:
+            # nom du mode sous le compte à rebours (sur deux lignes s'il est long)
+            lines = font.wrap(b.mode.name, b.W, 2)
+            y = L.arena_y + b.H // 2 + 28
+            for i, line in enumerate(lines):
+                font.draw(surf, line, L.arena_x + b.W // 2, y + i * 16, b.mode.color, 2, "center")
 
     def _go(self, surf):
         b, L = self.b, self.L

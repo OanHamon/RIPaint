@@ -23,6 +23,7 @@ from textual.theme import Theme
 from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, RichLog, Static
 
+from game import modes
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
@@ -41,7 +42,7 @@ TEAM_WORDS = {name: colors[1] for name, colors in theme.TEAMS.items()}
 
 # Réglages modifiables depuis l'interface ; les autres clés de config.json sont préservées.
 MANAGED = [f"prob_{k}" for k in ITEM_KINDS] + [
-    "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "max_items", "max_hourglasses", "master_volume", "music_volume",
+    "mode", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "max_items", "max_hourglasses", "master_volume", "music_volume",
     "music_enabled", "video_count", "seed", "export_srt"]
 
 
@@ -403,6 +404,8 @@ class MainScreen(Screen):
         with Horizontal(id="body"):
             with SettingsColumn(id="left"):
                 with Vertical(classes="panel", id="p-game"):
+                    yield Choice("Mode", modes.CHOICES, s.mode, id="mode")
+                    yield Static(id="mode-info")
                     yield Choice("Joueurs", PLAYER_CHOICES, s.players if s.players in (2, 3, 4) else 0,
                                  id="players")
                     yield Stepper("Taille des cubes", s.cube_size, 5, 16, 1, "{:g} px", id="cube_size")
@@ -460,12 +463,13 @@ class MainScreen(Screen):
         self.refresh_derived()
         self.refresh_stats()
         self.log_line("●", "Atelier prêt. G pour générer, P pour un aperçu en direct.", theme.BLUE_LIGHT)
-        self.query_one("#players").focus()
+        self.query_one("#mode").focus()
 
     # ---- Réglages --------------------------------------------------------------------------
 
     def collect(self) -> cfg.Settings:
         s = self.s
+        s.mode = self.query_one("#mode", Choice).value
         s.players = self.query_one("#players", Choice).value
         s.cube_size = int(self.query_one("#cube_size", Stepper).value)
         s.lives = int(self.query_one("#lives", Stepper).value)
@@ -489,6 +493,7 @@ class MainScreen(Screen):
         s = self.s
         self._loading = True
         try:
+            self.query_one("#mode", Choice).set_value(s.mode, notify=False)
             self.query_one("#players", Choice).set_value(s.players if s.players in (2, 3, 4) else 0, notify=False)
             for name in ("cube_size", "lives", "obstacles", "speed_ramp"):
                 self.query_one(f"#{name}", Stepper).set_value(getattr(s, name), notify=False)
@@ -533,10 +538,28 @@ class MainScreen(Screen):
 
     def refresh_derived(self) -> None:
         s = self.s
-        weights, pcts = s.item_weights(), s.item_percentages()
+        mode = modes.BY_KEY.get(s.mode)
+        # un mode impose ses probabilités : les notes montrent celles qui seront vraiment utilisées
+        shown = modes.apply(s, mode)
+        weights, pcts = shown.item_weights(), shown.item_percentages()
+        unit = "réel" if mode is None else "mode"
         for kind in ITEM_KINDS:
-            self.query_one(f"#prob_{kind}", PixelSlider).note = (
-                "jamais" if weights[kind] <= 0 else f"{pcts[kind]:5.1f} % réel")
+            slider = self.query_one(f"#prob_{kind}", PixelSlider)
+            if s.mode == modes.RANDOM:
+                slider.note = "selon mode"
+            else:
+                slider.note = "jamais" if weights[kind] <= 0 else f"{pcts[kind]:5.1f} % {unit}"
+        items = self.query_one("#p-items")
+        if s.mode == modes.CLASSIC:
+            items.border_subtitle = " probabilité d'apparition "
+            pitch = Text("  réglages ci-dessous, objets au choix", style=theme.GREY)
+        elif mode is None:
+            items.border_subtitle = " tirées avec le mode "
+            pitch = Text("  un mode différent à chaque vidéo", style=theme.GREY)
+        else:
+            items.border_subtitle = f" imposées par {mode.label} "
+            pitch = Text("  " + mode.pitch, style=theme.GREY_LIGHT)
+        self.query_one("#mode-info", Static).update(pitch)
 
         base = s.intro_duration + s.battle_duration + s.outro_duration
         longest = base + s.max_hourglasses * s.hourglass_bonus
@@ -630,6 +653,8 @@ class MainScreen(Screen):
                 elif kind == "RESULT":
                     info = json.loads(rest)
                     msg = team_text(f"{Path(info['path']).name}  ", theme.WHITE)
+                    if info.get("mode"):
+                        msg.append(f"{info['mode']} · ", style=f"bold {theme.YELLOW}")
                     msg.append(f"{info['duration']:.0f} s · {info['cubes']} cubes · ", style=theme.GREY)
                     msg.append_text(team_text(info["summary"], theme.GREY_LIGHT))
                     self.log_line("✓", msg, theme.GREEN_LIGHT)
@@ -783,6 +808,7 @@ Screen.-short #p-log {{ height: 7; }}
 #seed {{ height: 1; width: 24; border: none; padding: 0 1; background: {theme.FLOOR_B}; }}
 #seed:focus {{ background: {theme.GREY_DARK}; }}
 #gen-info {{ margin-top: 1; }}
+#mode-info {{ height: auto; margin-bottom: 1; }}
 
 Journal {{ background: {theme.NAVY_DARK}; scrollbar-size-vertical: 1; overflow-x: hidden; }}
 

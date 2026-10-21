@@ -16,6 +16,20 @@ une arène en rebondissant, ramassent des objets, et la couleur qui couvre le pl
 | Aimant | Attire tous les objets vers le cube pendant 4 s |
 | Bottes | Le cube va 1,8 fois plus vite pendant 5 s (traînée de fantômes) |
 
+**Modes de jeu** (réglage « Mode ») : un mode impose ses probabilités d'objets et retouche quelques réglages ;
+son nom s'affiche pendant le compte à rebours et figure dans le nom du fichier. « classique » garde vos
+curseurs, « aléatoire » tire un mode différent pour chaque vidéo (selon la seed).
+
+| Mode | Objets | Caractère |
+|------|--------|-----------|
+| KABOOM | Bombes, fusils | Mèche courte, grosses explosions, objets fréquents |
+| GOGO PAINT | Rouleaux, seaux, pinceaux, potions | Pluie d'objets de peinture, vies illimitées : course à la peinture pure |
+| BLIZZARD | Glace, fusils, bottes | La glace fige tout le monde plus longtemps, les fusils achèvent |
+| TURBO | Bottes, rouleaux, aimants | Cubes plus rapides et accélération jusqu'à x2,3 |
+| TITANS | Potions, pinceaux, rouleaux | Potions de 9 s et grand pinceau : des géants qui balaient l'arène |
+| LOOT RAIN | Tous | Un objet toutes les 1,2 s, jusqu'à 8 à la fois, aimants en bonus |
+| SUDDEN DEATH | Fusils, bombes, pinceaux, seaux | Une seule vie : le premier touché est K.O. (mais sa peinture reste !) |
+
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
 - Chaque vidéo correspond à une **seed** inscrite dans son nom : la même seed avec les mêmes réglages redonne exactement la même partie

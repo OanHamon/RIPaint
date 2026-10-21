@@ -16,7 +16,7 @@ from engine8bit import palette
 from engine8bit.display import FPS
 
 from . import items as item_logic
-from . import physics
+from . import modes, physics
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
 from .obstacles import make_obstacles
@@ -47,6 +47,8 @@ class Result:
 class Battle:
     def __init__(self, seed: int, settings: Settings):
         self.seed = seed
+        self.mode = modes.resolve(seed, settings)
+        settings = modes.apply(settings, self.mode)
         self.settings = settings
         self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
                                   settings.arena_centered)
@@ -96,7 +98,8 @@ class Battle:
         self.next_spawn = self.battle_start + self.interval
         self.counts = np.zeros(len(self.cubes), dtype=np.int64)
 
-        self.subtitle(0, self.battle_start, self.hook)
+        intro = self.hook if self.mode is None else f"{self.mode.name} MODE! {self.hook}"
+        self.subtitle(0, self.battle_start, intro)
 
     # ---- Utilitaires ---------------------------------------------------------------------
 

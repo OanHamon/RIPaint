@@ -60,9 +60,11 @@ def _generate(count: int, seed_text: str | None, machine: bool) -> int:
         if machine:
             say(f"DONE {i} {len(seeds)} {res.path}")
             say("RESULT " + json.dumps({"path": str(res.path), "seed": seed, "duration": res.duration,
-                                        "cubes": res.n_cubes, "summary": res.summary}, ensure_ascii=False))
+                                        "cubes": res.n_cubes, "summary": res.summary,
+                                        "mode": res.mode}, ensure_ascii=False))
         else:
-            say(f"  -> {res.path.name}  ({res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
+            mode = f"mode {res.mode}, " if res.mode else ""
+            say(f"  -> {res.path.name}  ({mode}{res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
     return 1 if errors else 0
 
 

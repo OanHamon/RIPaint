@@ -75,6 +75,7 @@ class Settings:
     boots_factor: float = 1.8         # multiplicateur de vitesse des bottes
 
     # Partie
+    mode: str = "classic"             # "classic", "random" ou un mode de game/modes.py
     intro_duration: float = 5.0
     battle_duration: float = 50.0
     outro_duration: float = 5.0

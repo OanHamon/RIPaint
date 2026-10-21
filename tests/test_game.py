@@ -607,3 +607,76 @@ def test_ice_cannot_finish_off_a_cube():
     v.lives = 1
     items.pickup(b, a, Item("ice", a.cx, a.cy, 0))
     assert v.lives == 1 and not v.dead and v.frozen > 0
+
+
+# ---- Modes de jeu ----------------------------------------------------------------------
+
+from game import modes  # noqa: E402
+
+
+def test_classic_mode_keeps_user_settings():
+    s = Settings(prob_gun=7, lives=4)
+    b = Battle(11, s)
+    assert b.mode is None and b.settings is s
+    assert run(11, Settings()).subtitles == run(11, Settings(mode="classic")).subtitles
+
+
+def test_mode_overrides_do_not_touch_user_settings():
+    s = Settings(mode="suddendeath", lives=4)
+    b = Battle(11, s)
+    assert b.settings.lives == 1 and b.settings.prob_ice == 0
+    assert s.lives == 4 and s.prob_ice == 20
+
+
+@pytest.mark.parametrize("mode", modes.MODES, ids=lambda m: m.key)
+def test_each_mode_only_spawns_its_items_and_finishes(mode):
+    seen = set()
+    from game.physics import OBSTACLE
+
+    def check(b):
+        seen.update(i.kind for i in b.items)
+        for c in b.cubes:
+            x0, y0, x1, y1 = c.rect()
+            assert -1 <= x0 and x1 <= b.W + 1 and -1 <= y0 and y1 <= b.H + 1
+            for ox0, oy0, ox1, oy1 in b.obstacles:
+                ox = min(c.cx + c.half, ox1) - max(c.cx - c.half, ox0)
+                oy = min(c.cy + c.half, oy1) - max(c.cy - c.half, oy0)
+                assert min(ox, oy) < 1.5, "cube dans un obstacle"
+
+    for seed in (3, 77):
+        b = run(seed, Settings(mode=mode.key, obstacles=4), check=check)
+        assert b.result is not None and b.mode is mode
+        assert (b.grid != OBSTACLE).sum() == b.paintable
+    allowed = {k for k, w in mode.weights.items() if w > 0}
+    assert seen and seen <= allowed
+
+
+def test_mode_shown_in_intro_subtitle_and_renders():
+    b = Battle(5, Settings(mode="kaboom"))
+    assert b.subtitles[0][2].startswith("KABOOM MODE!")
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    for _ in range(b.battle_start + 5):
+        b.step()
+        r.draw(surf)
+
+
+def test_random_mode_depends_on_seed_only():
+    s = Settings(mode="random")
+    picked = [modes.resolve(seed, s).key for seed in range(60)]
+    assert picked == [modes.resolve(seed, s).key for seed in range(60)]
+    assert set(picked) == set(modes.BY_KEY)
+    assert Battle(8, s).mode is modes.resolve(8, s)
+
+
+def test_mode_names_fit_in_arena():
+    from engine8bit import font
+    b = Battle(1, Settings())
+    for m in modes.MODES:
+        assert all(font.text_width(line, 2) <= b.W for line in font.wrap(m.name, b.W, 2))
+        assert set(m.weights) <= set(ITEM_KINDS)
+        assert all(hasattr(Settings, k) for k in m.overrides)
+
+
+def test_mode_saved_in_settings():
+    assert Settings.from_dict(Settings(mode="turbo").to_dict()).mode == "turbo"

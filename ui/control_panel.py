@@ -13,6 +13,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from game import modes
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
@@ -56,6 +57,15 @@ class ControlPanel:
                              state="readonly", width=18)
         combo.grid(row=0, column=1, sticky="w", padx=6, pady=2)
         combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        ttk.Label(box, text="Mode de jeu").grid(row=6, column=0, sticky="w")
+        mode_labels = dict(modes.CHOICES)
+        self.mode = tk.StringVar(value=mode_labels.get(self.s.mode, mode_labels[modes.CLASSIC]))
+        mode_combo = ttk.Combobox(box, textvariable=self.mode, values=list(mode_labels.values()),
+                                  state="readonly", width=18)
+        mode_combo.grid(row=6, column=1, sticky="w", padx=6, pady=2)
+        mode_combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        self.mode_info = ttk.Label(box, foreground="#666", wraplength=330)
+        self.mode_info.grid(row=7, column=0, columnspan=2, sticky="w")
         self.cube_size = tk.IntVar(value=self.s.cube_size)
         self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
         self.speed_ramp = tk.DoubleVar(value=self.s.speed_ramp)
@@ -174,6 +184,7 @@ class ControlPanel:
         s = self.s
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
+        s.mode = next((k for k, text in modes.CHOICES if text == self.mode.get()), modes.CLASSIC)
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
         s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
@@ -193,13 +204,23 @@ class ControlPanel:
 
     def on_change(self, save: bool = True):
         s = self.collect()
-        pcts = s.item_percentages()
+        mode = modes.BY_KEY.get(s.mode)
+        shown = modes.apply(s, mode)
+        pcts = shown.item_percentages()
         for kind, lbl in self.pct_labels.items():
-            w = s.item_weights()[kind]
-            if w <= 0:
+            w = shown.item_weights()[kind]
+            if s.mode == modes.RANDOM:
+                lbl.config(text="selon le mode")
+            elif w <= 0:
                 lbl.config(text="jamais")
             else:
-                lbl.config(text=f"{pcts[kind]:.1f} % réel")
+                lbl.config(text=f"{pcts[kind]:.1f} % {'réel' if mode is None else 'mode'}")
+        if s.mode == modes.CLASSIC:
+            self.mode_info.config(text="Objets selon les probabilités ci-contre.")
+        elif mode is None:
+            self.mode_info.config(text="Un mode différent tiré pour chaque vidéo.")
+        else:
+            self.mode_info.config(text=mode.pitch[0].upper() + mode.pitch[1:] + ".")
         for lbl, var in self.vol_labels.values():
             lbl.config(text=f"{round(self._get(var, 0))} %")
         if save:

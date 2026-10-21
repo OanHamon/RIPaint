@@ -41,7 +41,7 @@ def test_boot_and_edit_settings(config, size):
         app = tui.RIPaintApp()
         async with app.run_test(size=size) as pilot:
             screen = await _to_main(pilot)
-            assert screen.focused is screen.query_one("#players")
+            assert screen.focused is screen.query_one("#mode")
             gun = screen.query_one("#prob_gun", PixelSlider)
             gun.focus()
             await pilot.pause()
@@ -54,7 +54,12 @@ def test_boot_and_edit_settings(config, size):
             screen.query_one("#players").action_nudge(2)        # aléatoire -> 2 -> 3 joueurs
             screen.query_one("#speed_ramp", Stepper).action_nudge(-3)
             screen.query_one("#export_srt", Toggle).action_toggle()
+            screen.query_one("#mode").action_nudge(2)           # classique -> aléatoire -> kaboom
             await pilot.pause(0.6)          # enregistrement différé
+            # le mode impose ses probabilités : les notes l'indiquent, les curseurs ne bougent pas
+            assert screen.query_one("#prob_bomb", PixelSlider).note == " 60.0 % mode"
+            assert screen.query_one("#prob_brush", PixelSlider).note == "jamais"
+            assert screen.query_one("#prob_gun", PixelSlider).value == 17
             await pilot.press("q")
     asyncio.run(run())
 
@@ -63,6 +68,7 @@ def test_boot_and_edit_settings(config, size):
     assert saved["prob_brush"] == 0
     assert saved["max_items"] == 5
     assert saved["players"] == 3
+    assert saved["mode"] == "kaboom"
     assert saved["speed_ramp"] == 1.5
     assert saved["export_srt"] is False
     assert saved["hooks"] == ["ACCROCHE PERSO"]   # clés avancées préservées
