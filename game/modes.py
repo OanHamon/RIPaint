@@ -33,33 +33,40 @@ MODES = [
     Mode("kaboom", "KABOOM", "Kaboom", "que des bombes et des fusils : ça explose de partout",
          palette.ORANGE,
          {"bomb": 60, "gun": 40},
-         {"item_interval": 3.0, "max_items": 4, "bomb_fuse": 1.1, "bomb_radius": 22}),
+         {"battle_duration": 40.0, "speed_ramp": 1.8, "item_interval": 3.0, "item_ramp": 0.5, "max_items": 4,
+          "bomb_fuse": 1.1, "bomb_radius": 22}),
     Mode("gogopaint", "GOGO PAINT", "Gogo Paint",
          "pluie de rouleaux, seaux et pinceaux, vies illimitées : on peint, on ne se tue pas",
          palette.MAGENTA,
          {"roller": 35, "bucket": 30, "brush": 20, "potion": 15},
-         {"item_interval": 2.0, "max_items": 5, "roller_duration": 6.5, "lives": 0}),
-    Mode("blizzard", "BLIZZARD", "Blizzard", "la glace fige tout le monde, les fusils finissent le travail",
+         {"battle_duration": 45.0, "speed_ramp": 1.6, "item_interval": 2.0, "item_ramp": 0.7, "max_items": 5,
+          "roller_duration": 6.5, "lives": 0}),
+    Mode("blizzard", "BLIZZARD", "Blizzard",
+         "partie glaciale et lente : la glace fige tout le monde, les fusils achèvent",
          palette.SKY,
          {"ice": 45, "gun": 35, "boots": 20},
-         {"item_interval": 3.5, "ice_duration": 2.6}),
+         {"battle_duration": 50.0, "speed_ramp": 1.5, "cube_speed": 48.0, "item_interval": 3.5, "item_ramp": 1.0,
+          "ice_duration": 2.6}),
     Mode("turbo", "TURBO", "Turbo", "bottes, rouleaux et aimants, les cubes foncent de plus en plus vite",
          palette.YELLOW,
          {"boots": 45, "roller": 30, "magnet": 25},
-         {"item_interval": 3.0, "cube_speed": 60.0, "speed_ramp": 2.3, "boots_factor": 1.9}),
-    Mode("titans", "TITANS", "Titans", "les potions durent longtemps : des géants qui balaient l'arène",
+         {"battle_duration": 35.0, "speed_ramp": 2.3, "cube_speed": 60.0, "item_interval": 3.0, "item_ramp": 0.6,
+          "boots_factor": 1.9}),
+    Mode("titans", "TITANS", "Titans", "des géants lents aux potions de 9 s qui balaient l'arène",
          palette.PURPLE,
          {"potion": 50, "brush": 30, "roller": 20},
-         {"item_interval": 3.5, "potion_duration": 9.0, "brush_radius": 36}),
+         {"battle_duration": 55.0, "speed_ramp": 1.4, "item_interval": 4.0, "item_ramp": 1.0,
+          "potion_duration": 9.0, "brush_radius": 36}),
     Mode("lootrain", "LOOT RAIN", "Pluie d'objets", "tous les objets tombent sans arrêt, aimants en bonus",
          palette.GREEN_LIGHT,
          {"magnet": 20, "gun": 12, "brush": 12, "potion": 12, "bomb": 12, "roller": 12, "bucket": 12,
           "ice": 8, "boots": 12, "hourglass": 6},
-         {"item_interval": 1.2, "max_items": 8, "max_hourglasses": 2}),
+         {"battle_duration": 45.0, "speed_ramp": 1.8, "item_interval": 1.2, "item_ramp": 0.8, "max_items": 8,
+          "max_hourglasses": 2}),
     Mode("suddendeath", "SUDDEN DEATH", "Mort subite", "une seule vie : le premier touché est K.O.",
          palette.RED,
          {"gun": 30, "bomb": 25, "brush": 25, "bucket": 20},
-         {"lives": 1, "item_interval": 3.0, "speed_ramp": 2.0}),
+         {"battle_duration": 40.0, "speed_ramp": 2.0, "item_interval": 3.0, "item_ramp": 0.6, "lives": 1}),
 ]
 
 BY_KEY = {m.key: m for m in MODES}
@@ -72,6 +79,16 @@ def resolve(seed: int, settings: Settings) -> Mode | None:
     if settings.mode == RANDOM:
         return random.Random(seed * 7919 + 101).choice(MODES)
     return BY_KEY.get(settings.mode)
+
+
+def summary(settings: Settings) -> str:
+    """Temps, ratio de vitesse et rythme des bonus, sur une ligne (réglages déjà appliqués)."""
+    start = settings.item_interval
+    end = start * settings.item_ramp
+    drops = f"bonus toutes les {start:g} s"
+    if abs(end - start) >= 0.05:
+        drops += f" → {round(end, 1):g} s"
+    return f"{settings.battle_duration:g} s · vitesse ×{settings.speed_ramp:g} · {drops}"
 
 
 def apply(settings: Settings, mode: Mode | None) -> Settings:

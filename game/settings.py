@@ -49,7 +49,8 @@ class Settings:
     prob_ice: float = 20
     prob_magnet: float = 20
     prob_boots: float = 20
-    item_interval: float = 5.0        # secondes entre deux apparitions
+    item_interval: float = 5.0        # secondes entre deux apparitions (au GO)
+    item_ramp: float = 1.0            # intervalle x1 au GO -> x item_ramp à la fin du chrono (<1 : de plus en plus vite)
     max_items: int = 3                # objets présents simultanément
     max_hourglasses: int = 3          # sabliers par partie
     hourglass_bonus: float = 3.0      # secondes ajoutées par sablier

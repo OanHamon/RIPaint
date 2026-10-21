@@ -42,7 +42,7 @@ TEAM_WORDS = {name: colors[1] for name, colors in theme.TEAMS.items()}
 
 # Réglages modifiables depuis l'interface ; les autres clés de config.json sont préservées.
 MANAGED = [f"prob_{k}" for k in ITEM_KINDS] + [
-    "mode", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "max_items", "max_hourglasses", "master_volume", "music_volume",
+    "mode", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
     "music_enabled", "video_count", "seed", "export_srt"]
 
 
@@ -421,6 +421,8 @@ class MainScreen(Screen):
                 with Vertical(classes="panel", id="p-spawn"):
                     yield Stepper("Intervalle", s.item_interval, 0.5, 30, 0.5, "{:g} s",
                                   "entre deux objets", id="item_interval")
+                    yield Stepper("Rythme final", s.item_ramp, 0.3, 2.0, 0.1, "×{:.1f}",
+                                  "intervalle à la fin", id="item_ramp")
                     yield Stepper("Objets max", s.max_items, 1, 10, 1, "{:g}", "en même temps", id="max_items")
                     yield Stepper("Sabliers max", s.max_hourglasses, 0, 10, 1, "{:g}", "par partie",
                                   id="max_hourglasses")
@@ -478,6 +480,7 @@ class MainScreen(Screen):
         for kind in ITEM_KINDS:
             setattr(s, f"prob_{kind}", float(self.query_one(f"#prob_{kind}", PixelSlider).value))
         s.item_interval = float(self.query_one("#item_interval", Stepper).value)
+        s.item_ramp = round(self.query_one("#item_ramp", Stepper).value, 2)
         s.max_items = int(self.query_one("#max_items", Stepper).value)
         s.max_hourglasses = int(self.query_one("#max_hourglasses", Stepper).value)
         s.master_volume = self.query_one("#master_volume", PixelSlider).value / 100
@@ -500,6 +503,7 @@ class MainScreen(Screen):
             for kind in ITEM_KINDS:
                 self.query_one(f"#prob_{kind}", PixelSlider).set_value(getattr(s, f"prob_{kind}"), notify=False)
             self.query_one("#item_interval", Stepper).set_value(s.item_interval, notify=False)
+            self.query_one("#item_ramp", Stepper).set_value(s.item_ramp, notify=False)
             self.query_one("#max_items", Stepper).set_value(s.max_items, notify=False)
             self.query_one("#max_hourglasses", Stepper).set_value(s.max_hourglasses, notify=False)
             self.query_one("#master_volume", PixelSlider).set_value(s.master_volume * 100, notify=False)
@@ -549,20 +553,27 @@ class MainScreen(Screen):
                 slider.note = "selon mode"
             else:
                 slider.note = "jamais" if weights[kind] <= 0 else f"{pcts[kind]:5.1f} % {unit}"
-        items = self.query_one("#p-items")
+        items, spawn = self.query_one("#p-items"), self.query_one("#p-spawn")
         if s.mode == modes.CLASSIC:
             items.border_subtitle = " probabilité d'apparition "
-            pitch = Text("  réglages ci-dessous, objets au choix", style=theme.GREY)
+            spawn.border_subtitle = ""
+            pitch = Text("  réglages ci-dessous, objets au choix\n  " + modes.summary(s), style=theme.GREY)
         elif mode is None:
             items.border_subtitle = " tirées avec le mode "
+            spawn.border_subtitle = " selon le mode "
             pitch = Text("  un mode différent à chaque vidéo", style=theme.GREY)
         else:
             items.border_subtitle = f" imposées par {mode.label} "
+            spawn.border_subtitle = f" imposée par {mode.label} "
             pitch = Text("  " + mode.pitch, style=theme.GREY_LIGHT)
+            pitch.append("\n  " + modes.summary(shown), style=f"bold {theme.YELLOW}")
         self.query_one("#mode-info", Static).update(pitch)
 
-        base = s.intro_duration + s.battle_duration + s.outro_duration
-        longest = base + s.max_hourglasses * s.hourglass_bonus
+        # durée selon le mode (aléatoire : du mode le plus court au plus long)
+        variants = [modes.apply(s, m) for m in modes.MODES] if s.mode == modes.RANDOM else [shown]
+        base = min(v.intro_duration + v.battle_duration + v.outro_duration for v in variants)
+        longest = max(v.intro_duration + v.battle_duration + v.outro_duration + v.max_hourglasses * v.hourglass_bonus
+                      for v in variants)
         duration = f"{base:g} s" if longest == base else f"{base:g} – {longest:g} s"
         files = ".mp4 + .srt" if s.export_srt else ".mp4"
         info = Text()

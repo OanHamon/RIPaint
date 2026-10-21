@@ -680,3 +680,35 @@ def test_mode_names_fit_in_arena():
 
 def test_mode_saved_in_settings():
     assert Settings.from_dict(Settings(mode="turbo").to_dict()).mode == "turbo"
+
+
+def _spawn_gaps(settings, seed=4):
+    b, times = Battle(seed, settings), []
+    last = b.next_spawn
+    while not b.done:
+        b.step()
+        if b.next_spawn != last:
+            times.append(last)
+            last = b.next_spawn
+    return np.diff(times), b
+
+
+def test_item_ramp_one_keeps_constant_interval():
+    gaps, b = _spawn_gaps(Settings())
+    assert set(gaps) == {b.interval}
+
+
+def test_item_ramp_speeds_up_drops_until_end_of_timer():
+    gaps, b = _spawn_gaps(Settings(item_interval=4.0, item_ramp=0.5))
+    assert gaps[0] >= 220 and gaps[-1] <= 135          # ~4 s au début -> ~2 s à la fin
+    assert all(x >= y for x, y in zip(gaps, gaps[1:]))
+
+
+@pytest.mark.parametrize("mode", modes.MODES, ids=lambda m: m.key)
+def test_mode_sets_duration_speed_and_drop_rhythm(mode):
+    b = Battle(3, Settings(mode=mode.key, battle_duration=99, speed_ramp=1.0, item_interval=9, item_ramp=1.0))
+    for key in ("battle_duration", "speed_ramp", "item_interval", "item_ramp"):
+        assert key in mode.overrides
+    assert b.battle_end - b.battle_start == round(mode.overrides["battle_duration"] * FPS)
+    assert b.interval == round(mode.overrides["item_interval"] * FPS)
+    assert "s · vitesse ×" in modes.summary(b.settings)

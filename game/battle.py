@@ -134,6 +134,13 @@ class Battle:
         t = min(1.0, max(0.0, (self.frame - self.battle_start) / base))
         return 1.0 + (self.settings.speed_ramp - 1.0) * t
 
+    def spawn_interval(self) -> int:
+        """Images avant le prochain objet : interval au GO, interval x item_ramp à la fin du
+        chrono de base (même progression que la vitesse)."""
+        base = max(1, round(self.settings.battle_duration * FPS))
+        t = min(1.0, max(0.0, (self.frame - self.battle_start) / base))
+        return max(1, round(self.interval * (1.0 + (self.settings.item_ramp - 1.0) * t)))
+
     def emit(self, name: str, gain: float = 1.0, frame: int | None = None) -> None:
         self.events.append(SoundEvent(self.frame if frame is None else frame, name, gain))
 
@@ -207,7 +214,7 @@ class Battle:
         s = self.settings
         if f >= self.next_spawn:
             item_logic.try_spawn(self)
-            self.next_spawn += self.interval
+            self.next_spawn += self.spawn_interval()
 
         for c in self.cubes:
             if c.stun > 0:
