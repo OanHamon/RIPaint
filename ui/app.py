@@ -45,6 +45,9 @@ TEAM_WORDS = {name: colors[1] for name, colors in theme.TEAMS.items()}
 MANAGED = [f"prob_{k}" for k in ITEM_KINDS] + [
     "mode", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
     "music_enabled", "video_count", "seed", "export_srt"]
+# Compteurs qu'un mode peut imposer : ils affichent alors la valeur du mode
+LOCKABLE = ["cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items",
+            "max_hourglasses"]
 
 
 def python_exe() -> str:
@@ -554,6 +557,11 @@ class MainScreen(Screen):
                 slider.note = "selon mode"
             else:
                 slider.note = "jamais" if weights[kind] <= 0 else f"{pcts[kind]:5.1f} % {unit}"
+            # les jauges suivent le mode ; les valeurs de l'utilisateur reviennent en classique
+            slider.override = None if mode is None else weights[kind]
+        for name in LOCKABLE:
+            locked = mode is not None and name in mode.overrides
+            self.query_one(f"#{name}", Stepper).override = getattr(shown, name) if locked else None
         items, spawn = self.query_one("#p-items"), self.query_one("#p-spawn")
         if s.mode == modes.CLASSIC:
             items.border_subtitle = " probabilité d'apparition "

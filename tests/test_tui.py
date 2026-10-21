@@ -56,10 +56,16 @@ def test_boot_and_edit_settings(config, size):
             screen.query_one("#export_srt", Toggle).action_toggle()
             screen.query_one("#mode").action_nudge(2)           # classique -> aléatoire -> kaboom
             await pilot.pause(0.6)          # enregistrement différé
-            # le mode impose ses probabilités : les notes l'indiquent, les curseurs ne bougent pas
+            # le mode impose ses probabilités : les jauges les affichent, les réglages perso sont gardés
             assert screen.query_one("#prob_bomb", PixelSlider).note == " 55.0 % mode"
+            assert screen.query_one("#prob_bomb", PixelSlider).override == 55
             assert screen.query_one("#prob_brush", PixelSlider).note == "jamais"
-            assert screen.query_one("#prob_gun", PixelSlider).value == 17
+            gun = screen.query_one("#prob_gun", PixelSlider)
+            assert gun.value == 17 and gun.override == 37
+            gun.action_nudge(5)                                 # bloqué tant que le mode impose
+            assert gun.value == 17
+            assert screen.query_one("#max_items", Stepper).override == 4
+            assert screen.query_one("#lives", Stepper).override is None
             await pilot.press("q")
     asyncio.run(run())
 

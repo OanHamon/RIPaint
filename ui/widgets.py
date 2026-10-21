@@ -26,6 +26,9 @@ class Row(Widget, can_focus=True):
             self.row = row
             super().__init__()
 
+    # valeur imposée (par un mode de jeu) : affichée à la place de la sienne, réglage bloqué
+    override = reactive(None)
+
     def __init__(self, label: str, *, id: str | None = None):
         super().__init__(id=id)
         self.label = label
@@ -34,6 +37,11 @@ class Row(Widget, can_focus=True):
         if self.has_focus:
             return Text("▸ " + self.label.ljust(LABEL_W), style=f"bold {theme.YELLOW}")
         return Text("  " + self.label.ljust(LABEL_W), style=theme.GREY_LIGHT)
+
+    def _value_style(self) -> str:
+        if self.override is not None:
+            return f"bold {theme.YELLOW}"
+        return f"bold {theme.WHITE}" if self.has_focus else theme.WHITE
 
     def on_focus(self) -> None:
         self.refresh()
@@ -71,6 +79,8 @@ class PixelSlider(Row):
         self.set_reactive(PixelSlider.value, int(value))
 
     def set_value(self, value: float, notify: bool = True) -> None:
+        if notify and self.override is not None:
+            return
         value = max(0, min(100, int(round(value))))
         if value != self.value:
             self.value = value
@@ -82,14 +92,15 @@ class PixelSlider(Row):
 
     def render(self) -> Text:
         text = self._label()
-        value_txt = f" {self.value:>3}{self.unit}"
+        shown = self.value if self.override is None else max(0, min(100, int(round(self.override))))
+        value_txt = f" {shown:>3}{self.unit}"
         tail = len(value_txt) + (self.note_width + 2 if self.note_width else 0)
         bar_w = max(6, self.size.width - text.cell_len - tail - 2)
         self._bar = (text.cell_len + 1, bar_w)
-        filled = self.value / 100 * bar_w
+        filled = shown / 100 * bar_w
         full = int(filled)
         partial = " ▏▎▍▌▋▊▉"[int((filled - full) * 8)] if full < bar_w else ""
-        color = self.color if self.value else theme.GREY_DARK
+        color = self.color if shown else theme.GREY_DARK
         text.append("▕", style=theme.GREY_DARK)
         text.append("█" * full, style=color)
         if partial.strip():
@@ -98,7 +109,7 @@ class PixelSlider(Row):
             partial = ""
         text.append("░" * (bar_w - full - len(partial)), style=theme.GREY_DARK)
         text.append("▏", style=theme.GREY_DARK)
-        text.append(value_txt, style=f"bold {theme.WHITE}" if self.has_focus else theme.WHITE)
+        text.append(value_txt, style=self._value_style())
         if self.note_width:
             text.append("  " + self.note.ljust(self.note_width)[:self.note_width], style=theme.GREY)
         return text
@@ -153,6 +164,8 @@ class Stepper(Row):
         return max(self.lo, min(self.hi, v))
 
     def set_value(self, value: float, notify: bool = True) -> None:
+        if notify and self.override is not None:
+            return
         value = self._clamp(value)
         if value != self.value:
             self.value = value
@@ -165,9 +178,11 @@ class Stepper(Row):
     def render(self) -> Text:
         text = self._label()
         left_x = text.cell_len
-        at_lo, at_hi = self.value <= self.lo, self.value >= self.hi
+        locked = self.override is not None
+        shown = self.value if not locked else self.override
+        at_lo, at_hi = locked or shown <= self.lo, locked or shown >= self.hi
         text.append("◀", style=theme.GREY_DARK if at_lo else theme.YELLOW)
-        text.append(f" {self.fmt.format(self.value):^9} ", style=f"bold {theme.WHITE}")
+        text.append(f" {self.fmt.format(shown):^9} ", style=f"bold {theme.YELLOW if locked else theme.WHITE}")
         right_x = text.cell_len
         text.append("▶", style=theme.GREY_DARK if at_hi else theme.YELLOW)
         self._arrows = (left_x, right_x)
