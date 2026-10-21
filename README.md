@@ -105,10 +105,11 @@ python main.py --generate 1 --seed 1234
 python main.py --preview --seed 1234
 ```
 
-Les vidéos sont enregistrées dans `videos/<date>_<heure>_cube-battle_seed<seed>.mp4`
-(ex. `2026-10-20_21h15m31s_cube-battle_seed28023524.mp4`)
-(+ `.srt` si l'option est cochée). Pour refaire une partie qui vous a plu, reprenez la seed du nom
-de fichier. Les réglages utilisés sont aussi inscrits dans les métadonnées du MP4.
+Les vidéos sont enregistrées dans `videos/`, nommées avec la date, la légende TikTok et la seed :
+`2026-10-21_10h41m58s - Which cube will win the PaintRace #satisfying #paintrace #whowillwin #minigame #fyp - seed43362402.mp4`
+(le « ? » est retiré du nom car Windows l'interdit). À côté : un `.txt` contenant la légende exacte,
+à copier-coller au moment de publier (TikTok ne lit pas le nom du fichier), et le `.srt` si l'option
+est cochée. La légende et les hashtags se modifient dans le panneau (section Génération).
 
 Déroulé d'une vidéo (réglages par défaut) :
 
@@ -175,6 +176,8 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `music_enabled` | true | Musique de fond |
 | `crf` / `x264_preset` | 18 / medium | Qualité d'encodage (plus petit = meilleure qualité) |
 | `output_dir` | videos | Dossier de sortie |
+| `caption` / `hashtags` | « Which cube will win the PaintRace? » / satisfying, paintrace, whowillwin, minigame, fyp | Légende TikTok (nom des vidéos + fichier .txt) |
+| `caption_file` | true | Écrire la légende dans un .txt à côté de chaque vidéo |
 
 ## Vérifier les vidéos
 

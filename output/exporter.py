@@ -70,6 +70,23 @@ def random_seed() -> int:
     return random.SystemRandom().randrange(1, 1_000_000_000)
 
 
+_FORBIDDEN = set('<>:"/\\|?*')
+
+
+def safe_filename(text: str, limit: int = 140) -> str:
+    """Texte utilisable dans un nom de fichier Windows (le « ? » et les autres caractères
+    interdits sont retirés, les espaces multiples réduits)."""
+    cleaned = "".join(" " if (ch in _FORBIDDEN or ord(ch) < 32) else ch for ch in text)
+    cleaned = " ".join(cleaned.split()).strip(" .")
+    return cleaned[:limit].rstrip(" .")
+
+
+def video_filename(settings: Settings, stamp: str, seed: int) -> str:
+    caption = safe_filename(settings.caption_text())
+    middle = f" - {caption} - " if caption else "_cube-battle_"
+    return f"{stamp}{middle}seed{seed}.mp4"
+
+
 def output_dir(settings: Settings) -> Path:
     d = Path(settings.output_dir)
     if not d.is_absolute():
@@ -113,7 +130,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     out_dir = out_dir or output_dir(settings)
     # date de création en tête du nom : les vidéos se trient naturellement par date
     stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    final = out_dir / f"{stamp}_cube-battle_seed{seed}.mp4"
+    final = out_dir / video_filename(settings, stamp, seed)
     tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
@@ -186,12 +203,15 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
               "-i", str(tmp_video), "-i", str(tmp_aac),
               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
               "-movflags", "+faststart",
-              "-metadata", f"title=Cube Battle #{seed}",
+              "-metadata", f"title={settings.caption_text() or f'Cube Battle #{seed}'}",
               "-metadata", "comment=" + json.dumps(meta, ensure_ascii=False),
               str(final)], err_log)
 
         if new_league is not None:
             league.save(new_league)            # seulement une fois la vidéo réussie
+        if settings.caption_file and settings.caption_text():
+            # légende exacte (avec « ? ») prête à coller dans TikTok
+            final.with_suffix(".txt").write_text(settings.caption_text() + "\n", encoding="utf-8")
         srt_path = None
         if settings.export_srt:
             srt_path = final.with_suffix(".srt")

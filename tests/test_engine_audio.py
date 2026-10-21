@@ -128,3 +128,18 @@ def test_previous_speeds_upgrade_to_faster_defaults(tmp_path):
     assert (s.cube_speed, s.speed_ramp, s.bullet_speed) == (54.0, 1.8, 170.0)
     p.write_text(json.dumps({"speed_ramp": 1.3, "config_version": 4}), encoding="utf-8")
     assert cfg.load(p).speed_ramp == 1.3          # valeur choisie dans le panneau : gardée
+
+
+def test_caption_and_video_filename():
+    from output.exporter import safe_filename, video_filename
+    s = cfg.Settings()
+    assert s.caption_text() == "Which cube will win the PaintRace? #satisfying #paintrace #whowillwin #minigame #fyp"
+    name = video_filename(s, "2026-10-21_10h00m00s", 42)
+    assert name == ("2026-10-21_10h00m00s - Which cube will win the PaintRace "
+                    "#satisfying #paintrace #whowillwin #minigame #fyp - seed42.mp4")
+    assert not any(ch in name for ch in '<>:"/\|?*')
+    assert safe_filename('a/b:c?  d*"e"') == "a b c d e"
+    s2 = cfg.Settings(caption="", hashtags=[])
+    assert video_filename(s2, "X", 7) == "X_cube-battle_seed7.mp4"
+    s3 = cfg.Settings(hashtags=["#Cube", " Race ", "foryou"])
+    assert s3.caption_text().endswith("#Cube #Race #foryou")

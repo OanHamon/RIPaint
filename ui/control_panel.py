@@ -164,6 +164,14 @@ class ControlPanel:
         self.seed.trace_add("write", lambda *_: self.on_change())
         ttk.Checkbutton(box, text="Exporter aussi les sous-titres (.srt, importables sur TikTok)", variable=self.srt,
                         command=self.on_change).grid(row=2, column=0, columnspan=2, sticky="w")
+        self.caption = tk.StringVar(value=self.s.caption)
+        self.hashtags = tk.StringVar(value=" ".join("#" + h.lstrip("#") for h in self.s.hashtags))
+        ttk.Label(box, text="Légende TikTok").grid(row=3, column=0, sticky="w")
+        ttk.Entry(box, textvariable=self.caption, width=34).grid(row=3, column=1, sticky="w", padx=6, pady=2)
+        ttk.Label(box, text="Hashtags").grid(row=4, column=0, sticky="w")
+        ttk.Entry(box, textvariable=self.hashtags, width=34).grid(row=4, column=1, sticky="w", padx=6, pady=2)
+        for var in (self.caption, self.hashtags):
+            var.trace_add("write", lambda *_: self.on_change())
 
         # --- Boutons ---
         bar = ttk.Frame(main)
@@ -244,6 +252,8 @@ class ControlPanel:
         s.video_count = max(1, int(self._get(self.count, 1)))
         s.seed = self.seed.get().strip()
         s.export_srt = bool(self.srt.get())
+        s.caption = self.caption.get().strip()
+        s.hashtags = [h.lstrip("#") for h in self.hashtags.get().replace(",", " ").split() if h.lstrip("#")]
         return s
 
     def on_change(self, save: bool = True):

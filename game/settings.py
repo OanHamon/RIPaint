@@ -26,6 +26,10 @@ DEFAULT_HOOKS = [
     "WILL YOUR CUBE WIN?",
     "WHO PAINTS THE MOST?",
 ]
+# 3 à 5 hashtags : un large (#fyp), une catégorie (#satisfying), le format (#paintrace,
+# #whowillwin, #minigame)
+DEFAULT_HASHTAGS = ["satisfying", "paintrace", "whowillwin", "minigame", "fyp"]
+
 OLD_FRENCH_HOOKS = [
     "CHOISIS TA COULEUR !",
     "QUI VA GAGNER ?",
@@ -109,6 +113,11 @@ class Settings:
     seed: str = ""
     export_srt: bool = True
     output_dir: str = "videos"
+    # Légende TikTok : reprise dans le nom du fichier (sans les caractères interdits par Windows)
+    # et écrite telle quelle dans un .txt à copier-coller au moment de publier
+    caption: str = "Which cube will win the PaintRace?"
+    hashtags: list = field(default_factory=lambda: list(DEFAULT_HASHTAGS))
+    caption_file: bool = True
     crf: int = 18
     x264_preset: str = "medium"
 
@@ -160,6 +169,11 @@ class Settings:
                 continue
             setattr(s, key, value)
         return s
+
+    def caption_text(self) -> str:
+        """« Which cube will win the PaintRace? #satisfying #paintrace ... »"""
+        tags = " ".join("#" + h.strip().lstrip("#").replace(" ", "") for h in self.hashtags if h.strip())
+        return " ".join(part for part in (self.caption.strip(), tags) if part)
 
     def music_on(self) -> bool:
         return self.music_enabled and self.music_volume > 0
