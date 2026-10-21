@@ -32,7 +32,7 @@ INVULN = 45                # invulnérabilité après une vie perdue (0,75 s)
 
 
 def nearest_opponent(b: "Battle", cube: Cube) -> Cube | None:
-    others = [c for c in b.cubes if c.idx != cube.idx and not c.dead]
+    others = [c for c in b.cubes if not b.allies(c.idx, cube.idx) and not c.dead]
     if not others:
         return None
     return min(others, key=lambda c: ((c.cx - cube.cx) ** 2 + (c.cy - cube.cy) ** 2, c.idx))
@@ -57,14 +57,20 @@ def try_spawn(b: "Battle") -> None:
     if s.comeback > 0 and b.rng.random() < s.comeback:
         alive = [c for c in b.cubes if not c.dead]
         if len(alive) >= 2:
-            near = min(alive, key=lambda c: (int(b.counts[c.idx]), c.idx))
+            near = min(alive, key=lambda c: (b.standing(c), c.idx))
+    # tempête : les objets n'apparaissent que dans la zone sûre
+    lo_x, lo_y, hi_x, hi_y = WALL_MARGIN, WALL_MARGIN, b.W - WALL_MARGIN - 1, b.H - WALL_MARGIN - 1
+    if b.storm_rect is not None:
+        x0, y0, x1, y1 = b.storm_rect
+        lo_x, lo_y = max(lo_x, int(x0) + 5), max(lo_y, int(y0) + 5)
+        hi_x, hi_y = max(lo_x, min(hi_x, int(x1) - 5)), max(lo_y, min(hi_y, int(y1) - 5))
     for attempt in range(80):
         if near is not None and attempt < 40:
-            x = int(min(max(near.cx + b.rng.uniform(-26, 26), WALL_MARGIN), b.W - WALL_MARGIN - 1))
-            y = int(min(max(near.cy + b.rng.uniform(-26, 26), WALL_MARGIN), b.H - WALL_MARGIN - 1))
+            x = int(min(max(near.cx + b.rng.uniform(-26, 26), lo_x), hi_x))
+            y = int(min(max(near.cy + b.rng.uniform(-26, 26), lo_y), hi_y))
         else:
-            x = b.rng.randint(WALL_MARGIN, b.W - WALL_MARGIN - 1)
-            y = b.rng.randint(WALL_MARGIN, b.H - WALL_MARGIN - 1)
+            x = b.rng.randint(lo_x, hi_x)
+            y = b.rng.randint(lo_y, hi_y)
         item = Item(kind, x, y, b.frame)
         ix0, iy0, ix1, iy1 = item.rect()
         clear = True
@@ -111,6 +117,7 @@ def check_pickups(b: "Battle") -> None:
 def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     s = b.settings
     cube.items += 1
+    b.pickup_log[item.kind] = b.pickup_log.get(item.kind, 0) + 1
     b.emit(f"pickup_{item.kind}")
     light = variants.colors(cube.team)[2]
     # le texte s'affiche du côté de l'arène opposé au cube, pour ne pas cacher l'action
@@ -159,7 +166,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     elif item.kind == "ice":
         frames = round(s.ice_duration * 60)
         for c in b.cubes:
-            if c.idx != cube.idx and not c.dead:
+            if not b.allies(c.idx, cube.idx) and not c.dead:
                 c.frozen = frames
                 c.kb_x = c.kb_y = 0.0
                 c.hit_anim = HIT_ANIM
@@ -248,8 +255,8 @@ def update_bullets(b: "Battle") -> None:
             physics.paint_rect(b.grid, ix - 1, iy - 1, ix + 1, iy + 1, bullet.owner)
             hit = None
             for c in b.cubes:
-                if c.idx == bullet.owner:
-                    continue
+                if b.allies(c.idx, bullet.owner):
+                    continue                      # les balles traversent le coéquipier
                 if abs(bullet.x - c.cx) <= c.half + 0.5 and abs(bullet.y - c.cy) <= c.half + 0.5:
                     hit = c
                     break
@@ -261,7 +268,7 @@ def update_bullets(b: "Battle") -> None:
                 impact(b, hit, bullet.dx, bullet.dy)
                 b.emit("bullet_hit")
                 hit.kb_x, hit.kb_y = bullet.dx * 50, bullet.dy * 50
-                damage(b, hit)
+                damage(b, hit, attacker=bullet.owner)
                 if not hit.dead:
                     hit.kb_x = hit.kb_y = 0.0
                     b.emit("stun", frame=b.frame + 6)
@@ -286,7 +293,7 @@ def update_swipes(b: "Battle") -> None:
         physics.paint_sector(b.grid, owner.cx, owner.cy, radius, sw.theta, a_from - 0.02, a_to, owner.idx)
         sw.painted_upto = p
         for c in b.cubes:
-            if c.idx == owner.idx or c.idx in sw.hit:
+            if b.allies(c.idx, owner.idx) or c.idx in sw.hit:
                 continue
             vx, vy = c.cx - owner.cx, c.cy - owner.cy
             dist = math.hypot(vx, vy)
@@ -304,7 +311,7 @@ def update_swipes(b: "Battle") -> None:
                 c.slow = round(s.slow_duration * 60)
                 c.hit_anim = HIT_ANIM
                 impact(b, c, kx, ky)
-                damage(b, c)
+                damage(b, c, attacker=owner.idx)
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, variants.colors(owner.team)[1], 8)
@@ -328,7 +335,7 @@ def update_bombs(b: "Battle") -> None:
         radius = s.bomb_radius * b.cubes[bomb.owner].base_size / 11
         b.splat(bomb.x, bomb.y, bomb.owner, radius)
         for c in b.cubes:
-            if c.idx == bomb.owner:
+            if b.allies(c.idx, bomb.owner):
                 continue
             vx, vy = c.cx - bomb.x, c.cy - bomb.y
             dist = math.hypot(vx, vy)
@@ -341,7 +348,7 @@ def update_bombs(b: "Battle") -> None:
                 c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
                 c.hit_anim = HIT_ANIM
                 impact(b, c, kx, ky)
-                damage(b, c)
+                damage(b, c, attacker=bomb.owner)
         ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
         b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
         b.sparkle(ax, ay, palette.WHITE, 10)
@@ -436,7 +443,7 @@ def update_waves(b: "Battle") -> None:
             else:
                 physics.paint_rect(b.grid, a0, lo_i, a1, hi_i, w.owner)
         for c in b.cubes:
-            if c.idx == w.owner or c.idx in w.hit:
+            if b.allies(c.idx, w.owner) or c.idx in w.hit:
                 continue
             along, across = (c.cx, c.cy) if w.horizontal else (c.cy, c.cx)
             if abs(across - w.band) <= w.half + c.half and abs(along - w.origin) <= d1 + c.half:
@@ -444,14 +451,14 @@ def update_waves(b: "Battle") -> None:
                 c.hit_anim = HIT_ANIM
                 impact(b, c, *((1.0, 0.0) if w.horizontal else (0.0, 1.0)))
                 b.emit("splat", gain=0.6)
-                damage(b, c)                      # la vague retire aussi une vie
+                damage(b, c, attacker=w.owner)    # la vague retire aussi une vie
         if w.origin - d1 <= 0 and w.origin + d1 >= length:
             b.waves.remove(w)
 
 
 # ---- Vies et K.O. ----------------------------------------------------------------------
 
-def damage(b: "Battle", cube: Cube, can_ko: bool = True) -> None:
+def damage(b: "Battle", cube: Cube, can_ko: bool = True, attacker: int | None = None) -> None:
     """Le cube est touché par l'objet d'un adversaire : il perd une vie (sauf invulnérable).
     `can_ko=False` : le coup ne peut pas faire tomber la dernière vie (glace, qui touche tous
     les adversaires à la fois : sinon un cube pourrait éliminer tout le monde en deux glaces)."""
@@ -459,6 +466,10 @@ def damage(b: "Battle", cube: Cube, can_ko: bool = True) -> None:
         return
     if not can_ko and cube.lives <= 1:
         return
+    if cube.lives <= 1 and b.fmt.early_end and not (b.alive_sides() - {b.side_of[cube.idx]}):
+        return                                   # jamais zéro survivant (double K.O. sur une bombe…)
+    if attacker is not None:
+        b.cubes[attacker].hits += 1
     cube.lives -= 1
     cube.invuln = INVULN
     cube.life_lost = 40
@@ -487,7 +498,7 @@ def knock_out(b: "Battle", cube: Cube) -> None:
     b.popup(f"{cube.team} K.O.!", light, anchor=anchor)
     b.emit("ko")
     b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 14)
-    b.trigger_slowmo()
+    b.on_knock_out(cube)
 
 
 # ---- Mode escalade : effets d'impact ----------------------------------------------------------

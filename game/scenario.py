@@ -44,9 +44,13 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obs
     Sans `strict`, placement d'origine (conservé pour rejouer à l'identique les anciennes vidéos)."""
     rng = random.Random(seed)
     n = rng.randint(2, 4)            # toujours tiré, pour que la seed garde le même sens
-    if settings.players in (2, 3, 4):
+    if 2 <= settings.players <= 8:
         n = settings.players
-    if n == 4:
+    if n > 4:
+        # bataille royale : les 4 couleurs d'origine + des couleurs supplémentaires
+        teams = palette.PRIMARY_TEAMS + [palette.FOURTH_TEAM] + rng.sample(palette.EXTRA_TEAMS, n - 4)
+        rng.shuffle(teams)
+    elif n == 4:
         teams = palette.PRIMARY_TEAMS + [palette.FOURTH_TEAM]
         rng.shuffle(teams)
     else:

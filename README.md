@@ -47,9 +47,72 @@ drapeau, adouci vers la couleur principale pour que les zones restent lisibles ;
 (`league.json` pour les couleurs, `league_countries.json` pour les pays). Les positions et la partie
 d'une seed ne changent pas d'une variante à l'autre : seuls les concurrents changent.
 
-Ajouter une variante (célébrités, animaux…) ou un pays : tout se passe dans `game/variants.py`.
+Variantes disponibles : **couleurs** (8 : les 4 d'origine + ORANGE, PURPLE, PINK, CYAN au-delà de
+4 cubes), **pays** (23 drapeaux), **fruits** (12), **animaux** (12 pelages : tigre, zèbre, vache,
+panda, abeille…), **planètes** (10), ou **aléatoire** (une variante différente à chaque vidéo).
+
+Ajouter une variante (célébrités…) ou un pays : tout se passe dans `game/variants.py`.
 Un concurrent = un nom, une famille de couleur, un motif de cube et un motif de traînée dessinés
 en ASCII (une lettre = un pixel, couleurs dans `PIXELS`).
+
+## Variété (rémunération TikTok : éviter les vidéos répétitives)
+
+TikTok écarte de sa rémunération les contenus « répétitifs ». Tout ce qui suit sert à ce que deux
+vidéos ne se ressemblent pas, ni à l'image, ni au son, ni dans la description.
+
+**Formats** (réglage « Format ») : la règle du jeu elle-même, en plus du mode.
+
+| Format | Règle |
+|---|---|
+| PAINT RACE | Le jeu d'origine : la plus grande surface gagne |
+| 2 VS 2 | Deux équipes de deux cubes de la même couleur, score commun, pas de tirs amis |
+| FIGHT! (combat) | Pas de peinture : les objets font des dégâts (6 vies), percuter un adversaire avec la potion ou les bottes le blesse (« STOMP! »), le dernier debout gagne |
+| BATTLE ROYALE | Combat sans peinture à 6-8 petits cubes, 4 vies, une tempête qui rétrécit l'arène : le dernier debout gagne |
+| SPEED RUN (court) | Course à la peinture express à 2-3 cubes, objets simples (~37 s) |
+| 1V1 DUEL (court) | Combat à deux, 3 vies, s'arrête au K.O. (~30-35 s) |
+
+Dans les formats de combat (combat, bataille royale, duel), une **tempête** (zone violette)
+rétrécit vers la fin et blesse les cubes restés dehors. Dès qu'il ne reste qu'un cube, c'est sa
+victoire : « LAST ONE STANDING! » et la partie s'arrête 1,5 s après le dernier K.O. Il reste
+toujours un survivant (pas de double K.O.). Pour qu'une vidéo longue dépasse quand même la minute,
+la partie est simulée d'avance au moment de la génération : si elle finirait trop tôt, les cubes
+reçoivent des vies en plus (puis la durée visée est un peu allongée).
+
+**Thèmes d'arène** (réglage « Thème ») : CLASSIC, LAVA, ICE CAVE, SPACE, JUNGLE, DESERT, NEON CITY,
+DEEP SEA, CANDY LAND. Le sol, le fond, les murs, les obstacles changent, avec une ambiance animée
+(neige, braises, étoiles, bulles, feuilles, sable, étincelles, cœurs) qui passe sous la peinture.
+Purement visuel : une seed rejoue la même partie quel que soit le thème.
+
+**Killcam** : quand un coup capable d'éliminer un cube à une vie arrive (balle en vol, bombe sur le
+point d'exploser, coup de pinceau, vague, tempête), la caméra zoome sur lui (x2, bandes noires) et
+la partie passe au ralenti x3 AVANT l'impact. S'il est éliminé, la caméra reste sur lui le temps de
+le voir griser ; s'il s'en sort, c'est un « close call ». 3 killcams au plus par vidéo.
+
+**Musiques** : 7 styles composés par le code (bataille, joyeux, chill, boss final, funk, turbo,
+mystère), chacun avec sa gamme, son tempo, ses timbres, ses rythmes de basse et de batterie. La piste
+alterne deux sections (A A B A) et finit par une section plus intense. « auto » choisit un style
+qui colle au mode / au format.
+
+**Garde-fou anti-répétition** (Variété) : chaque vidéo générée est notée dans `history.json`. Pour
+la suivante, chaque réglage laissé sur « aléatoire » (format, mode, thème, variante, carte, nombre de
+cubes, musique) est tiré en pénalisant fortement ce qui vient d'être fait : jamais deux fois de
+suite la même valeur, rarement la même dans les 5-6 dernières vidéos.
+
+**Durées variées** : 85 % des vidéos (réglable) durent plus d'1 minute, avec une durée qui change
+à chaque fois (62 à ~95 s) ; les autres sont courtes (30-50 s) avec un format simple (sprint, duel,
+course à 2). Les courtes sont réparties régulièrement (jamais deux de suite).
+
+**Légende automatique** : après la partie, une analyse repère ce qui s'est passé (écart final,
+remontée, K.O., close call, objet le plus ramassé, format, thème, ligue, coupe) et écrit une accroche
+différente à chaque vidéo, sans jamais dévoiler le gagnant, plus une question et 4-5 hashtags
+(tes 2 premiers hashtags + des hashtags selon le contenu). Elle est dans le `.txt` à côté de la vidéo.
+
+**PaintCup** : un tournoi de 8 à 16 concurrents sur plusieurs vidéos. Chaque vidéo générée joue le
+match suivant (3 ou 4 cubes) ; les 2 premiers passent, les autres sont éliminés : à 16, huitièmes
+(4 matchs) → demi-finales (2) → finale = 7 épisodes. Le bandeau affiche « SEMI-FINAL 1/2 », la fin
+de vidéo montre qui passe et le match suivant, la finale sacre le champion (podium). Classement
+général dans le panneau (page PaintCup) ; l'état est dans `cup.json`, une nouvelle coupe démarre
+quand la précédente est finie.
 
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
@@ -76,6 +139,16 @@ python -m pip install -r requirements.txt
 
 Au lancement (`Lancer.bat` ou `python main.py`), RIPaint demande quelle interface ouvrir :
 `1` (ou `ENTRÉE`) pour l'**application terminal**, `2` pour le **panneau de contrôle** en fenêtre.
+
+Le panneau de contrôle (thème sombre) a une page par sujet dans la colonne de gauche : **Vidéo**
+(format, mode, joueurs, concurrents, thème, carte, musique), **Variété** (garde-fou, durées variées,
+légende automatique, options de rétention, dernières vidéos), **PaintCup** (activer le tournoi,
+participants, classement général), **Objets** (probabilités, apparition, réglages fins) et
+**Son & export**. En bas, toujours visibles : nombre de vidéos, GÉNÉRER, Aperçu, progression.
+Le bouton **🎲 TOUT ALÉATOIRE** génère le même nombre de vidéos, mais en tirant au hasard toute la
+partie et toute l'apparence pour chaque vidéo (format, mode, joueurs, concurrents, thème, carte,
+musique, avec le garde-fou anti-répétition), sans modifier tes réglages enregistrés. En ligne de
+commande : `python main.py --generate 5 --all-random`.
 Pour sauter la question : `python main.py --terminal` ou `python main.py --gui`.
 Les deux interfaces partagent les mêmes réglages (`config.json`).
 
@@ -139,11 +212,13 @@ python main.py --generate 1 --seed 1234
 python main.py --preview --seed 1234
 ```
 
-Les vidéos sont enregistrées dans `videos/`, nommées avec la date, la légende TikTok et la seed :
-`2026-10-21_10h41m58s - Which cube will win the PaintRace #satisfying #paintrace #whowillwin #minigame #fyp - seed43362402.mp4`
-(le « ? » est retiré du nom car Windows l'interdit). À côté : un `.txt` contenant la légende exacte,
-à copier-coller au moment de publier (TikTok ne lit pas le nom du fichier), et le `.srt` si l'option
-est cochée. La légende et les hashtags se modifient dans le panneau (section Génération).
+Les vidéos sont enregistrées dans `videos/`, nommées avec la date (sans l'heure), le début de la
+légende de la vidéo, ce qui la distingue (format, variante, mode, thème) et la seed :
+`2026-10-21 - Lava arena, 3 cubes, one winner Comment your color - lava - seed544034424.mp4`
+(emojis, hashtags et caractères interdits par Windows retirés du nom). À côté : un `.txt` contenant
+la légende exacte, à copier-coller au moment de publier (TikTok ne lit pas le nom du fichier), et le
+`.srt` si l'option est cochée. Avec la légende automatique décochée, la légende fixe du panneau
+(page Son & export) est utilisée.
 
 Déroulé d'une vidéo (réglages par défaut) :
 
@@ -158,7 +233,8 @@ Déroulé d'une vidéo (réglages par défaut) :
    gagnant (surnom, score, puis classement de la ligue), et retour à l'image d'ouverture : la
    dernière image est identique à la première, la vidéo boucle sans couture.
 
-Durée : 62 s minimum (68 à 71 s avec des sabliers). Une vidéo se génère en 15 à 30 s environ.
+Durée : 62 s minimum (68 à 71 s avec des sabliers), ou variée avec les durées variées (voir
+Variété). Une vidéo se génère en 15 à 30 s environ.
 
 ### Rémunération TikTok (Creator Rewards Program)
 
@@ -178,7 +254,15 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 
 | Clé | Défaut | Rôle |
 |---|---|---|
-| `players` | 0 | Nombre de cubes : 0 = aléatoire (2 à 4), sinon 2, 3 ou 4 |
+| `format` | random | `classic`, `random`, `duo`, `combat`, `royale`, `sprint`, `duel` |
+| `theme` | random | `random` ou un thème (`classic`, `lava`, `ice`, `space`, `jungle`, `desert`, `neon`, `ocean`, `candy`) |
+| `music_style` | auto | `auto`, `random` ou un style (`battle`, `happy`, `chill`, `boss`, `funk`, `turbo`, `spooky`) |
+| `killcam` | true | Zoom + ralenti sur un cube menacé d'élimination, avant le coup |
+| `variety` | true | Garde-fou anti-répétition (`history.json`) |
+| `duration_mix` / `long_share` | true / 0.85 | Durées variées, part des vidéos de plus d'1 minute |
+| `caption_auto` | true | Légende écrite d'après la partie (sinon `caption` + `hashtags`) |
+| `cup` / `cup_size` | false / 16 | Jouer la PaintCup, participants d'une nouvelle coupe (8 à 16) |
+| `players` | 0 | Nombre de cubes : 0 = aléatoire (2 à 4), sinon 2 à 8 |
 | `cube_size` | 13 | Taille des cubes en pixels logiques (x2 avec la potion) |
 | `lives` | 3 | Vies par cube (0 = illimitées) |
 | `max_bonus_lives` | 2 | Vies gagnées avec les cœurs au-delà du départ |
@@ -240,6 +324,11 @@ main.py               point d'entrée (interface / --generate / --preview)
 engine8bit/           MOTEUR RÉUTILISABLE : surface logique, palette NES, police pixel, sprites ASCII, zones de sécurité
 audio/                SYNTHÉ RÉUTILISABLE : oscillateurs + ADSR, bruitages, musique procédurale, mixage
 game/                 LE CONCEPT : réglages, scénario (seed), physique, objets, simulation, dessin
+  formats.py          règles du jeu (course, 2 contre 2, combat, bataille royale, sprint, duel)
+  themes.py           thèmes d'arène (visuels)
+  variety.py          garde-fou anti-répétition et durées variées (history.json)
+  captions.py         légendes écrites d'après la partie
+  cup.py              PaintCup (tournoi sur plusieurs vidéos, cup.json)
 output/               export MP4 via ffmpeg, sous-titres .srt, aperçu temps réel
 ui/app.py ...         application terminal (Textual) : démarrage animé, atelier, logo, mini-bataille
 ui/control_panel.py   panneau de contrôle tkinter

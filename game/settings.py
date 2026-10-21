@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / "config.json"
 
-CONFIG_VERSION = 7
+CONFIG_VERSION = 8
 
 # Les nouveaux objets sont ajoutés À LA FIN : l'ordre compte pour le tirage (sens des seeds).
 ITEM_KINDS = ["gun", "brush", "potion", "hourglass", "bomb", "roller", "bucket", "ice", "magnet", "boots",
@@ -83,6 +83,11 @@ class Settings:
 
     # Partie
     mode: str = "classic"             # "classic", "random" ou un mode de game/modes.py
+    format: str = "classic"           # règle du jeu : "classic", "random", "combat", "duo", "royale"… (game/formats.py)
+    theme: str = "random"             # thème d'arène (purement visuel) : "random" ou un thème de game/themes.py
+    music_style: str = "auto"         # "auto" (selon le mode), "random" ou un style de audio/music.py
+    target_duration: float = 0.0      # durée visée de la vidéo en s (fixée par le garde-fou ; 0 = durée normale)
+    extra_lives: int = 0              # combat / bataille royale : vies en plus pour que la vidéo dépasse 1 min
     intro_duration: float = 3.0       # compte à rebours 3-2-1
     battle_duration: float = 50.0     # durée minimale de bataille (allongée si besoin, voir tiktok_rewards)
     outro_duration: float = 7.0       # FIN + révélation des scores + gagnant + retour au début (boucle)
@@ -93,12 +98,13 @@ class Settings:
     comeback: float = 0.5             # probabilité qu'un objet apparaisse près du cube en dernière place
     lead_announce: bool = True        # « RED LEADS! » quand le leader change
     slowmo: bool = True               # ralenti sur les K.O. et les explosions
+    killcam: bool = True              # zoom + ralenti sur un cube qui risque d'être éliminé, AVANT le coup
     nicknames: bool = True            # surnoms des cubes (« RED BLAZE »)
     league: bool = True               # classement des couleurs conservé d'une vidéo à l'autre
     follow_prompt: bool = True        # animation « abonne-toi » pendant le compte à rebours
     tiktok_rewards: bool = True       # vidéo toujours > 1 min (Creator Rewards Program)
     min_video_duration: float = 62.0  # durée minimale visée quand tiktok_rewards est actif
-    players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
+    players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2 à 8 (au-delà de 4 : bataille royale)
     variant: str = "colors"           # qui s'affronte : « colors », « countries »… (voir game/variants.py)
     paint_pattern: bool = True        # traînée aux motifs du concurrent (drapeau…) ; False = couleur unie
     cube_size: int = 13
@@ -112,6 +118,18 @@ class Settings:
     obstacles: int = 3                # petits blocs fixes dans l'arène (0 = aucun)
     speed_ramp: float = 1.8           # vitesse de base x1 au GO -> x speed_ramp à la fin du chrono
     cube_speed: float = 54.0          # px logiques / s
+
+    # Variété (rémunération TikTok : éviter les vidéos trop semblables)
+    variety: bool = True              # garde-fou : évite de répéter format, thème, mode, musique… d'une vidéo à l'autre
+    duration_mix: bool = True         # durées variées : quelques vidéos courtes, la plupart > 1 min
+    long_share: float = 0.85          # part des vidéos de plus d'1 minute avec les durées variées
+    caption_auto: bool = True         # légende écrite d'après la partie (sinon `caption` telle quelle)
+
+    # PaintCup (tournoi sur plusieurs vidéos)
+    cup: bool = False                 # chaque vidéo générée joue le match suivant de la PaintCup
+    cup_size: int = 16                # participants d'une nouvelle coupe (8 à 16)
+    lineup: list = field(default_factory=list)   # concurrents imposés (match de coupe) ; vide = tirés au hasard
+    cup_label: str = ""               # « SEMI-FINAL 1/2 » (fixé par la coupe)
 
     # Génération
     video_count: int = 1
@@ -206,10 +224,17 @@ def migrate(data: dict) -> dict:
                 data.pop(key)
     if int(data.get("config_version", 1)) < 7:
         data.pop("escalation", None)   # l'escalade n'est plus une case à cocher : c'est un mode de jeu
+    if int(data.get("config_version", 1)) < 8:
+        # variété par défaut : formats, thèmes et musiques tirés au hasard (avec le garde-fou)
+        data.update({k: v for k, v in FRESH.items() if k not in data})
     if int(data.get("config_version", 1)) < 3 and data.get("hooks") == OLD_FRENCH_HOOKS:
         data.pop("hooks")       # accroches par défaut en français -> nouvelles accroches anglaises
     data["config_version"] = CONFIG_VERSION
     return data
+
+
+# Réglages d'un premier lancement (et ajoutés aux anciens config.json) : un peu de tout, au hasard
+FRESH = {"format": "random", "theme": "random", "music_style": "auto", "mode": "random"}
 
 
 def load(path: Path = CONFIG_PATH) -> Settings:
@@ -218,7 +243,7 @@ def load(path: Path = CONFIG_PATH) -> Settings:
             return Settings.from_dict(migrate(json.loads(path.read_text(encoding="utf-8"))))
         except (OSError, json.JSONDecodeError):
             pass
-    return Settings()
+    return Settings.from_dict(FRESH)
 
 
 def save(settings: Settings, path: Path = CONFIG_PATH) -> None:

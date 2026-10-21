@@ -75,7 +75,7 @@ def normalize(x: np.ndarray, peak_dbfs: float = PEAK_DBFS) -> np.ndarray:
 
 def render_track(events: list[SoundEvent], total_frames: int, bank: dict, music_seed: int,
                  master_volume: float = 1.0, music_volume: float = 0.5, paint_sound: bool = False,
-                 fps: int = 60) -> np.ndarray:
+                 fps: int = 60, music_style: str = "battle") -> np.ndarray:
     """Construit la piste audio mono (float32) au sample près, synchronisée sur les images."""
     spf = SAMPLE_RATE // fps
     total = total_frames * spf
@@ -100,7 +100,8 @@ def render_track(events: list[SoundEvent], total_frames: int, bank: dict, music_
         s = marks["music_start"]
         e = marks.get("music_stop", total)
         if e > s:
-            out[s:e] += music_track(music_seed, (e - s) / SAMPLE_RATE)[:e - s] * MUSIC_LEVEL * music_volume
+            track = music_track(music_seed, (e - s) / SAMPLE_RATE, style=music_style)
+            out[s:e] += track[:e - s] * MUSIC_LEVEL * music_volume
     if paint_sound and "paint_start" in marks:
         s = marks["paint_start"]
         e = marks.get("paint_stop", total)
@@ -123,7 +124,7 @@ class LivePlayer:
     """Lecture temps réel via pygame.mixer (pour l'aperçu)."""
 
     def __init__(self, bank: dict, music_seed: int, master_volume: float, music_volume: float,
-                 paint_sound: bool = False):
+                 paint_sound: bool = False, music_style: str = "battle"):
         import pygame
         self.pg = pygame
         self.policy = MixPolicy()
@@ -134,7 +135,7 @@ class LivePlayer:
         self.music_channel = pygame.mixer.Channel(0)
         self.paint_channel = pygame.mixer.Channel(1)
         self.sounds = {k: pygame.sndarray.make_sound(to_int16_stereo(v)) for k, v in bank.items()}
-        self.music = pygame.sndarray.make_sound(to_int16_stereo(make_loop(music_seed)))
+        self.music = pygame.sndarray.make_sound(to_int16_stereo(make_loop(music_seed, music_style)))
         self.paint = pygame.sndarray.make_sound(to_int16_stereo(paint_bed(2.0))) if paint_sound else None
 
     def handle(self, ev: SoundEvent, t: float):

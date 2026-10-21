@@ -23,7 +23,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
-from game import league, modes, variants
+from game import captions, cup as paintcup, league, modes, variants
 from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
@@ -48,6 +48,9 @@ class ExportResult:
     summary: str
     srt_path: Path | None = None
     mode: str = ""                  # nom du mode de jeu ("" = classique)
+    caption: str = ""               # légende TikTok de la vidéo (aussi dans le .txt)
+    caption_id: str = ""            # accroche utilisée (garde-fou anti-répétition)
+    details: str = ""               # format · mode · thème · variante · musique (journal)
 
 
 def ffmpeg_exe() -> str:
@@ -82,9 +85,10 @@ def safe_filename(text: str, limit: int = 140) -> str:
     return cleaned[:limit].rstrip(" .")
 
 
-def video_filename(settings: Settings, stamp: str, seed: int, mode: str = "") -> str:
-    """<date> - <légende TikTok> - [<mode> - ]seed<seed>.mp4"""
-    caption = safe_filename(settings.caption_text())
+def video_filename(settings: Settings, stamp: str, seed: int, mode: str = "", caption: str | None = None) -> str:
+    """<date> - <légende TikTok> - [<mode> - ]seed<seed>.mp4 ; `caption` : légende générée pour
+    cette vidéo (sans hashtags ni emojis dans le nom), sinon la légende fixe des réglages."""
+    caption = safe_filename(settings.caption_text() if caption is None else captions.title_part(caption), 110)
     if not caption:
         tag = f"_{mode}" if mode else ""
         return f"{stamp}_cube-battle{tag}_seed{seed}.mp4"
@@ -129,25 +133,27 @@ def _run(cmd, err_path: Path) -> None:
 
 
 def export_video(seed: int, settings: Settings, out_dir: Path | None = None, progress=None,
-                 cancel=None) -> ExportResult:
+                 cancel=None, plan: dict | None = None, recent_captions: list | None = None,
+                 cup_state: dict | None = None, cup_slot: tuple | None = None) -> ExportResult:
     """Calcule et encode une partie. `progress(frame, total)` est appelé régulièrement ;
-    `cancel()` peut renvoyer True pour interrompre."""
+    `cancel()` peut renvoyer True pour interrompre. `plan` : choix du garde-fou (durée, format…) ;
+    `cup_state` / `cup_slot` : match de PaintCup joué par cette vidéo (l'état est mis à jour)."""
     out_dir = out_dir or output_dir(settings)
-    # date de création en tête du nom : les vidéos se trient naturellement par date
-    stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
-    mode = modes.resolve(seed, settings)
-    variant = variants.resolve(settings)
-    tag = " ".join(t for t in ("" if variant.key == variants.COLORS else variant.key, mode.key if mode else "") if t)
-    final = out_dir / video_filename(settings, stamp, seed, tag)
-    tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
-    tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
-    err_log = final.with_name(final.stem + ".ffmpeg.log")
+    # date en tête du nom (sans l'heure) : les vidéos se trient par jour
+    stamp = datetime.now().strftime("%Y-%m-%d")
+    work = out_dir / f"_render_seed{seed}_{datetime.now().strftime('%H%M%S%f')}"
+    tmp_video = work.with_name(work.name + ".video.tmp.mp4")
+    tmp_audio = work.with_name(work.name + ".audio.tmp.wav")
+    err_log = work.with_name(work.name + ".ffmpeg.log")
 
     temp_files: list[Path] = []
     battle = Battle(seed, settings)
-    # ligue : le résultat est connu d'avance (partie pré-simulée), on affiche le classement à jour
+    mode, variant = battle.mode, battle.variant
+    # ligue / coupe : le résultat est connu d'avance (partie pré-simulée), on affiche le classement à jour
     new_league = None
-    if settings.league and battle.final is not None:
+    if cup_state is not None and cup_slot is not None and battle.final is not None:
+        battle.cup = paintcup.record(cup_state, *cup_slot, [rk.team for rk in battle.final["result"].ranking])
+    elif settings.league and battle.final is not None:
         r = battle.final["result"]
         winner = battle.cubes[r.winner].team if r.winner is not None else None
         new_league = league.with_result(league.load(variant=battle.variant.key), winner)
@@ -188,10 +194,10 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         total = battle.total_frames
         music_vol = settings.music_volume if settings.music_on() else 0.0
         mono = render_track(battle.events, total, build_bank(settings.aim_duration), seed,
-                            settings.master_volume, music_vol, settings.paint_sound, FPS)
+                            settings.master_volume, music_vol, settings.paint_sound, FPS, battle.music_style)
         # encodage AAC puis contrôle de la crête APRÈS encodage : l'AAC peut ajouter quelques dB
         # de dépassement sur des transitoires très secs ; si besoin on réencode un peu moins fort
-        tmp_aac = final.with_name(final.stem + ".audio.tmp.m4a")
+        tmp_aac = work.with_name(work.name + ".audio.tmp.m4a")
         temp_files.append(tmp_aac)
         gain = 1.0
         for _ in range(4):
@@ -203,32 +209,49 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
                 break
             gain *= AAC_CEILING / peak * 0.98
 
+        # légende : écrite d'après la partie (différente à chaque vidéo) ou fixe
+        caption_id = ""
+        if settings.caption_auto:
+            caption, caption_id = captions.make(battle, settings.hashtags, recent_captions or [],
+                                                random.Random(seed * 409 + 3), plan)
+        else:
+            caption = settings.caption_text()
+        tags = [t for t in (battle.fmt.key if battle.fmt.key != "classic" else "",
+                            "" if variant.key == variants.COLORS else variant.key, mode.key if mode else "",
+                            battle.theme.key if battle.theme.key != "classic" else "") if t]
+        final = out_dir / video_filename(settings, stamp, seed, " ".join(tags),
+                                         caption if settings.caption_auto else None)
+
         summary = battle.result_text
         meta = {"seed": seed, "generator": "cube_battle", "result": summary,
-                "mode": mode.key if mode else modes.CLASSIC, "settings": battle.settings.to_dict()}
+                "mode": mode.key if mode else modes.CLASSIC, "format": battle.fmt.key, "theme": battle.theme.key,
+                "music": battle.music_style, "variant": variant.key, "plan": plan or {},
+                "settings": battle.settings.to_dict()}
         if new_league is not None:
             meta["league_day"] = new_league["day"]
         _run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
               "-i", str(tmp_video), "-i", str(tmp_aac),
               "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "copy",
               "-movflags", "+faststart",
-              "-metadata", f"title={settings.caption_text() or f'Cube Battle #{seed}'}",
+              "-metadata", f"title={caption or f'Cube Battle #{seed}'}",
               "-metadata", "comment=" + json.dumps(meta, ensure_ascii=False),
               str(final)], err_log)
 
         if new_league is not None:
             league.save(new_league, variant=battle.variant.key)   # seulement une fois la vidéo réussie
-        if settings.caption_file and settings.caption_text():
-            # légende exacte (avec « ? ») prête à coller dans TikTok
-            final.with_suffix(".txt").write_text(settings.caption_text() + "\n", encoding="utf-8")
+        if settings.caption_file and caption:
+            # légende exacte (avec « ? » et emojis) prête à coller dans TikTok
+            final.with_suffix(".txt").write_text(caption + "\n", encoding="utf-8")
         srt_path = None
         if settings.export_srt:
             srt_path = final.with_suffix(".srt")
             write_srt(srt_path, battle.subtitles, FPS, total)
         if progress:
             progress(total, total)
+        details = " · ".join(x for x in (battle.fmt.name, mode.name if mode else "", battle.theme.name,
+                                          variant.label, battle.music_style) if x)
         return ExportResult(final, seed, total, total / FPS, len(battle.cubes), battle.hourglasses_taken,
-                            summary, srt_path, mode.name if mode else "")
+                            summary, srt_path, mode.name if mode else "", caption, caption_id, details)
     finally:
         for p in (tmp_video, tmp_audio, err_log, *temp_files):
             try:
@@ -248,3 +271,84 @@ def seeds_for_batch(count: int, settings: Settings) -> list[int]:
         if s not in seeds:
             seeds.append(s)
     return seeds
+
+
+def plan_for(seed: int, settings: Settings, history: dict, cup_state: dict | None = None):
+    """Réglages concrets d'une vidéo d'un lot : match de PaintCup éventuel, puis choix du
+    garde-fou anti-répétition (format, mode, thème, musique, durée…).
+    Renvoie (réglages de la vidéo, plan, (tour, match) de coupe ou None)."""
+    from dataclasses import replace
+
+    from game import variety
+
+    rng = random.Random(seed * 7 + 1)
+    s = settings
+    slot = None
+    if settings.cup and cup_state is not None:
+        slot = paintcup.next_match(cup_state)
+    if slot is not None:
+        lineup = cup_state["rounds"][slot[0]]["matches"][slot[1]]["lineup"]
+        fmt = settings.format
+        if fmt not in ("classic", "combat"):
+            # une coupe se joue en course à la peinture (parfois en combat) : 3 ou 4 cubes par match
+            recent = [v.get("format") for v in history["videos"]]
+            fmt = variety.weighted_pick(rng, {"classic": 3.0, "combat": 1.0}, recent, avoid_last=False)
+        s = replace(s, lineup=list(lineup), cup_label=paintcup.label(cup_state, *slot),
+                    variant=cup_state["variant"], players=len(lineup), format=fmt)
+    plan = variety.plan_video(s, history, rng, allow_short=slot is None)
+    if slot is not None:
+        plan["cup"] = s.cup_label
+    video = variety.apply(s, plan)
+    return keep_over_a_minute(seed, video, plan), plan, slot
+
+
+def simulated_seconds(seed: int, settings: Settings) -> float:
+    """Durée qu'aura la vidéo (partie simulée sans image ni son)."""
+    from dataclasses import replace
+
+    b = Battle(seed, replace(settings, league=False, cup_label=""))
+    if b.final is not None:                       # partie déjà pré-simulée pour le teaser
+        return b.final["duration"]
+    while not b.done:
+        b.step()
+    return b.total_frames / FPS
+
+
+def keep_over_a_minute(seed: int, settings: Settings, plan: dict) -> Settings:
+    """Combat / bataille royale finissent dès qu'il reste un seul cube : si la partie (simulée
+    d'avance) tombe sous la durée minimale d'une vidéo longue, on donne des vies en plus, puis on
+    allonge un peu la durée visée, jusqu'à dépasser la minute. Le plan garde les retouches."""
+    from dataclasses import replace
+
+    from game import formats
+
+    fmt = formats.resolve(seed, settings)
+    long_video = settings.tiktok_rewards and (settings.target_duration <= 0
+                                              or settings.target_duration >= settings.min_video_duration)
+    if not (fmt.early_end and long_video):
+        return settings
+    for step in range(6):
+        if simulated_seconds(seed, settings) >= settings.min_video_duration:
+            break
+        if step < 3:
+            settings = replace(settings, extra_lives=settings.extra_lives + 2)
+        else:
+            settings = replace(settings, target_duration=max(settings.target_duration, 62.0) + 10)
+    if settings.extra_lives:
+        plan["extra_lives"] = settings.extra_lives
+    if settings.target_duration:
+        plan["target_duration"] = settings.target_duration
+    return settings
+
+
+def ensure_cup(settings: Settings, seed: int) -> dict | None:
+    """Coupe en cours (créée si besoin, ou la suivante si la précédente est terminée)."""
+    if not settings.cup:
+        return None
+    state = paintcup.load()
+    if state is None or state.get("champion"):
+        number = (state or {}).get("number", 0) + 1
+        variant = settings.variant if settings.variant in variants.BY_KEY else "countries"
+        state = paintcup.new_cup(variant, settings.cup_size, seed, number)
+        paintcup.save(state)
+    return state

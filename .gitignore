@@ -16,3 +16,8 @@ __pycache__/
 
 # Ligue (classement entre vidéos)
 league.json
+league_*.json
+
+# Garde-fou anti-répétition (historique des vidéos) et PaintCup en cours
+history.json
+cup.json

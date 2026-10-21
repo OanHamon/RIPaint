@@ -15,8 +15,9 @@ from audio.sfx import BOUNCE_VARIANTS
 from engine8bit import palette
 from engine8bit.display import FPS
 
+from audio import music
 from . import items as item_logic
-from . import modes, physics, variants
+from . import formats, modes, physics, themes, variants
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
 from . import maps
@@ -40,15 +41,28 @@ LEAD_MARGIN = 0.03          # nouvelle tête annoncée seulement avec 3 points d
 LEAD_START_DELAY = 240      # pas d'annonce de leader pendant les 4 premières secondes
 NICKNAMES = ["BLAZE", "FROST", "TURBO", "NINJA", "ROCKY", "PIXEL", "COMET", "SPIKE", "BOLT", "NOVA",
              "VIPER", "ZIGGY", "MANGO", "ROCKET", "SHADOW", "BLITZ", "LUNA", "MAX", "TANK", "DUKE"]
+# Killcam : zoom + ralenti sur un cube à une vie quand un coup fatal arrive sur lui
+KILLCAM_FRAMES = 84         # durée du ralenti « avant le coup » (images de vidéo)
+KILLCAM_RATE = 3            # la partie n'avance qu'une image sur 3 pendant la killcam
+KILLCAM_MAX = 3             # au plus 3 killcams par vidéo (sinon le ralenti lasse)
+KILLCAM_COOLDOWN = 4 * FPS
+# Tempête (formats « survie ») : la zone sûre rétrécit et blesse les cubes restés dehors
+STORM_MIN = 0.38            # taille finale de la zone (part de l'arène)
+STORM_TICK = 72             # une blessure toutes les 1,2 s hors de la zone
+END_DELAY = 90              # fin anticipée : 1,5 s après le dernier K.O.
 
 
 @dataclass
 class Ranked:
-    idx: int
+    idx: int                 # cube représentant du camp (le premier de l'équipe)
     team: str
     cells: int
     pct: float
     items: int
+    alive: bool = True
+    lives: int = 0
+    label: str = ""          # texte affiché au classement (« 41.2% », « 3 HP », « K.O. »)
+    score: float = 0.0       # longueur de la barre de classement (0 à 1)
 
 
 @dataclass
@@ -57,6 +71,12 @@ class Result:
     winner: int | None       # index du cube gagnant, None si égalité
     tied: list               # index des cubes à égalité parfaite (si égalité)
     by_items: bool           # départagé au nombre d'objets ramassés
+
+
+def fixed_frames_seconds(settings: Settings) -> float:
+    """Durée de la vidéo hors bataille (teaser, compte à rebours, fin), en secondes."""
+    start = (TEASER_FRAMES + REWIND_FRAMES if settings.teaser else 0) + round(settings.intro_duration * FPS)
+    return (start + round(settings.outro_duration * FPS)) / FPS
 
 
 def default_battle_frames(settings: Settings) -> int:
@@ -80,9 +100,16 @@ def video_seconds(settings: Settings) -> tuple[float, float]:
 class Battle:
     def __init__(self, seed: int, settings: Settings, battle_frames: int | None = None):
         self.seed = seed
-        self.mode = modes.resolve(seed, settings)
+        # format (règle du jeu) puis mode (objets, rythme) ; certains formats ignorent le mode
+        self.fmt = formats.resolve(seed, settings)
+        self.mode = modes.resolve(seed, settings) if self.fmt.use_mode else None
         settings = modes.apply(settings, self.mode)
+        settings = formats.apply(settings, self.fmt, seed)
         self.settings = settings
+        self.theme = themes.resolve(seed, settings)
+        self.music_style = music.resolve_style(seed, settings, self.mode, self.fmt)
+        self.paints = self.fmt.paint
+        self.survival = self.fmt.win == formats.SURVIVAL
         self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
                                   settings.arena_centered)
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
@@ -96,9 +123,21 @@ class Battle:
         self.rng = self.scenario.rng
         self.fx = random.Random(seed * 31 + 7)        # aléatoire purement visuel
         # la variante remplace les couleurs tirées par le scénario (positions et seed inchangées)
-        self.variant = variants.resolve(settings)
-        self.competitors = self.variant.pick(seed, [c.team for c in self.scenario.cubes])
-        self.hook = self.variant.adapt(self.scenario.hook)
+        self.variant = variants.resolve(settings, seed)
+        slots = [c.team for c in self.scenario.cubes]
+        # camps : un cube par camp, ou des équipes (2 contre 2 : les cubes 0 et 2 contre 1 et 3)
+        n_sides = max(1, len(slots) // max(1, self.fmt.team_size))
+        lineup = [variants.BY_NAME[n] for n in settings.lineup if n in variants.BY_NAME]
+        picked = lineup if len(lineup) == n_sides else self.variant.pick(seed, slots[:n_sides])
+        self.competitors = [picked[i % n_sides] for i in range(len(slots))]
+        self.side_of = [i % n_sides for i in range(len(slots))]
+        self.sides = [[i for i in range(len(slots)) if self.side_of[i] == s] for s in range(n_sides)]
+        if settings.cup_label:
+            self.hook = "WHO WINS THE CUP?" if "FINAL" == settings.cup_label.split(" ")[0] else "TOP 2 GO THROUGH!"
+        elif self.fmt.hook:
+            self.hook = self.variant.adapt(self.fmt.hook)
+        else:
+            self.hook = self.variant.adapt(self.scenario.hook)
         self.grid = np.full((self.H, self.W), -1, dtype=np.int8)
         self.cubes = [Cube(i, self.competitors[i].name, c.x, c.y, c.dx, c.dy, settings.cube_size)
                       for i, c in enumerate(self.scenario.cubes)]
@@ -143,8 +182,24 @@ class Battle:
         self.crown_jump: tuple | None = None    # (ancien leader, nouveau, image) pour l'animation
         self.lead_changes = 0
         self.league: dict | None = None         # classement de la ligue (fourni par l'export)
+        self.cup: dict | None = None            # état de la PaintCup (fourni par l'export)
         names = random.Random(seed * 13 + 5).sample(NICKNAMES, len(self.cubes))
-        self.nicknames = names if (settings.nicknames and self.variant.nicknames) else [""] * len(self.cubes)
+        # en équipes, les surnoms distinguent les deux cubes d'une même couleur
+        show = settings.nicknames and (self.variant.nicknames or self.fmt.team_size > 1)
+        self.nicknames = names if show else [""] * len(self.cubes)
+        # killcam, tempête, fin anticipée, journal de la partie (pour la légende)
+        self.slowmo_rate = 2
+        self.cam_target: int | None = None
+        self.cam_level = 0.0
+        self.cam_hold = 0
+        self.killcams = 0
+        self.last_killcam = -10 ** 6
+        self.killcam_victims: list[int] = []
+        self.storm_rect: tuple | None = None
+        self.ended_early = False
+        self.ko_log: list[tuple[int, int]] = []
+        self.pickup_log: dict[str, int] = {}
+        self.timeline: list[list[int]] = []     # valeur de chaque camp, une fois par seconde
 
         self.frame = -1
         self.intro_start = (TEASER_FRAMES + REWIND_FRAMES) if settings.teaser else 0
@@ -155,12 +210,21 @@ class Battle:
             battle_frames = default_battle_frames(settings)
         self.base_battle_frames = battle_frames
         self.battle_end = self.battle_start + battle_frames
+        self.storm_start = self.battle_start + round(self.fmt.storm * battle_frames) if self.fmt.storm else None
+        self.storm_end = self.battle_start + round(0.92 * battle_frames)
         self.interval = max(1, round(settings.item_interval * FPS))
         self.next_spawn = self.battle_start + self.interval
         self.counts = np.zeros(len(self.cubes), dtype=np.int64)
 
-        intro = self.hook if self.mode is None else f"{self.mode.name} MODE! {self.hook}"
-        self.subtitle(0, self.battle_start, intro)
+        self.band = self.band_lines()
+        parts = []
+        if settings.cup_label:
+            parts.append(f"PAINTCUP {settings.cup_label}!")
+        if self.fmt.key != formats.CLASSIC:
+            parts.append(self.fmt.name if self.fmt.name.endswith("!") else self.fmt.name + "!")
+        if self.mode is not None:
+            parts.append(f"{self.mode.name} MODE!")
+        self.subtitle(0, self.battle_start, " ".join(parts + [self.hook]))
         if settings.teaser:
             self.subtitle(0, TEASER_FRAMES, "WHO WINS?")
 
@@ -168,8 +232,8 @@ class Battle:
         # à la boucle de fin et à la ligue. La simulation étant déterministe et relative au GO,
         # l'arène finale est exactement celle de la vraie partie.
         self.final = None
-        if settings.teaser or settings.league:
-            pre = Battle(seed, replace(settings, teaser=False, league=False), battle_frames)
+        if settings.teaser or settings.league or settings.cup_label:
+            pre = Battle(seed, replace(settings, teaser=False, league=False, cup_label=""), battle_frames)
             while not pre.done:
                 pre.step()
             self.final = {
@@ -177,6 +241,7 @@ class Battle:
                 "cubes": [(c.cx, c.cy, c.size, c.dead) for c in pre.cubes],
                 "result": pre.result,
                 "percentages": pre.percentages(),
+                "duration": (self.battle_start + (pre.battle_end - pre.battle_start) + self.outro_frames) / FPS,
             }
 
     # ---- Utilitaires ---------------------------------------------------------------------
@@ -212,7 +277,8 @@ class Battle:
         if hide <= 0:
             return False
         if self.phase == "battle":
-            return self.battle_end - self.frame <= hide
+            # formats « survie » : les vies restent visibles (le suspense, c'est qui tombe)
+            return not self.survival and self.battle_end - self.frame <= hide
         return self.phase == "outro"
 
     def intensity(self) -> float:
@@ -237,11 +303,158 @@ class Battle:
     def trigger_slowmo(self) -> None:
         if self.settings.slowmo and self.slowmo == 0 and self.phase == "battle":
             self.slowmo = SLOWMO_FRAMES
+            self.slowmo_rate = 2
             self.flash = 3
             self.emit("slowmo")
 
+    def band_lines(self) -> list[str]:
+        """Bandeau du compte à rebours : coupe, format et mode (le plus important d'abord)."""
+        lines = []
+        if self.settings.cup_label:
+            lines.append(self.settings.cup_label)
+        elif self.fmt.key != formats.CLASSIC:
+            lines.append(self.fmt.name)
+        if self.mode is not None:
+            lines.append(self.mode.name)
+        return lines[:2]
+
+    def allies(self, i: int, j: int) -> bool:
+        """Même camp (le cube lui-même ou son coéquipier en 2 contre 2) : pas de dégâts entre eux."""
+        return self.side_of[i] == self.side_of[j]
+
+    def side_counts(self) -> list[int]:
+        return [int(sum(self.counts[i] for i in side)) for side in self.sides]
+
+    def side_lives(self) -> list[int]:
+        return [sum(self.cubes[i].lives for i in side if not self.cubes[i].dead) for side in self.sides]
+
+    def side_values(self) -> list[int]:
+        """Ce qui fait gagner chaque camp : la peinture, ou les vies dans les formats « survie »."""
+        return self.side_lives() if self.survival else self.side_counts()
+
+    def standing(self, c: Cube) -> int:
+        """Valeur du camp d'un cube (le plus faible reçoit le coup de pouce des objets)."""
+        return self.side_values()[self.side_of[c.idx]]
+
+    def alive_sides(self) -> set[int]:
+        return {self.side_of[c.idx] for c in self.cubes if not c.dead}
+
     def percentages(self) -> list[float]:
         return [float(c) / self.paintable * 100 for c in self.counts]
+
+    def side_percentages(self) -> list[float]:
+        return [float(c) / self.paintable * 100 for c in self.side_counts()]
+
+    # ---- Killcam ---------------------------------------------------------------------------
+
+    def start_killcam(self, victim: Cube) -> None:
+        """Un coup qui peut éliminer `victim` arrive : zoom sur lui et ralenti marqué, avant l'impact."""
+        self.slowmo = KILLCAM_FRAMES
+        self.slowmo_rate = KILLCAM_RATE
+        self.cam_target = victim.idx
+        self.cam_hold = KILLCAM_FRAMES + 12
+        self.killcams += 1
+        self.last_killcam = self.frame
+        self.killcam_victims.append(victim.idx)
+        self.emit("slowmo")
+
+    def on_knock_out(self, cube: Cube) -> None:
+        cube.ko_frame = self.frame
+        self.ko_log.append((self.frame, cube.idx))
+        if self.settings.killcam and self.settings.slowmo and self.phase == "battle":
+            # on reste sur le cube éliminé le temps de le voir griser et rapetisser
+            self.cam_target = cube.idx
+            self.cam_hold = max(self.cam_hold, 54)
+            if self.slowmo > 0:
+                self.slowmo = max(self.slowmo, 36)
+                return
+        self.trigger_slowmo()
+
+    def _threatened(self, c: Cube) -> bool:
+        """Un coup capable d'éliminer `c` arrive-t-il dans les prochaines images ?"""
+        s = self.settings
+        for bl in self.bullets:
+            if self.allies(bl.owner, c.idx):
+                continue
+            vx, vy = c.cx - bl.x, c.cy - bl.y
+            along = vx * bl.dx + vy * bl.dy
+            across = abs(vx * bl.dy - vy * bl.dx)
+            speed = s.bullet_speed / FPS
+            if 0 < along < speed * 24 and across <= c.half + 1 and c.invuln * speed < along:
+                return True
+        for bomb in self.bombs:
+            radius = s.bomb_radius * self.cubes[bomb.owner].base_size / 11
+            if (not self.allies(bomb.owner, c.idx) and bomb.frames_left <= 26 and c.invuln < bomb.frames_left
+                    and math.hypot(c.cx - bomb.x, c.cy - bomb.y) <= radius + c.half):
+                return True
+        for sw in self.swipes:
+            owner = self.cubes[sw.owner]
+            radius = s.brush_radius * owner.size / owner.base_size
+            if (not self.allies(sw.owner, c.idx) and c.idx not in sw.hit and c.invuln == 0
+                    and math.hypot(c.cx - owner.cx, c.cy - owner.cy) <= radius + c.half):
+                return True
+        for w in self.waves:
+            along, across = (c.cx, c.cy) if w.horizontal else (c.cy, c.cx)
+            gap = abs(along - w.origin) - w.dist
+            if (not self.allies(w.owner, c.idx) and c.idx not in w.hit and c.invuln == 0
+                    and abs(across - w.band) <= w.half + c.half and 0 < gap < 30):
+                return True
+        if self.storm_rect is not None and c.invuln == 0:
+            x0, y0, x1, y1 = self.storm_rect
+            outside = not (x0 <= c.cx <= x1 and y0 <= c.cy <= y1)
+            if outside and STORM_TICK - (self.frame - self.storm_start) % STORM_TICK <= 20:
+                return True
+        return False
+
+    def _watch_threats(self) -> None:
+        s = self.settings
+        if (not (s.killcam and s.slowmo) or s.lives <= 0 or self.slowmo > 0 or self.killcams >= KILLCAM_MAX
+                or self.frame - self.last_killcam < KILLCAM_COOLDOWN):
+            return
+        for c in self.cubes:
+            if not c.dead and c.lives == 1 and self._threatened(c):
+                self.start_killcam(c)
+                return
+
+    def _update_camera(self) -> None:
+        if self.cam_hold > 0:
+            self.cam_hold -= 1
+            self.cam_level = min(1.0, self.cam_level + 0.12)
+        elif self.cam_level > 0:
+            self.cam_level = max(0.0, self.cam_level - 0.06)
+            if self.cam_level == 0:
+                self.cam_target = None
+
+    # ---- Tempête ---------------------------------------------------------------------------
+
+    def _storm(self, f: int) -> None:
+        if self.storm_start is None or f < self.storm_start:
+            return
+        if f == self.storm_start:
+            self.popup("STORM IS COMING!", palette.PURPLE_LIGHT, duration=90)
+            self.emit("speed_up")
+        k = min(1.0, (f - self.storm_start) / max(1, self.storm_end - self.storm_start))
+        scale = 1 - (1 - STORM_MIN) * k
+        w, h = self.W * scale, self.H * scale
+        self.storm_rect = ((self.W - w) / 2, (self.H - h) / 2, (self.W + w) / 2, (self.H + h) / 2)
+        # plus qu'un camp debout : la tempête l'épargne (c'est le gagnant)
+        if (f - self.storm_start) % STORM_TICK == STORM_TICK - 1 and len(self.alive_sides()) > 1:
+            x0, y0, x1, y1 = self.storm_rect
+            for c in self.cubes:
+                if not c.dead and not (x0 <= c.cx <= x1 and y0 <= c.cy <= y1) and c.invuln == 0:
+                    c.hit_anim = item_logic.HIT_ANIM
+                    self.sparkle(self.layout.arena_x + c.cx, self.layout.arena_y + c.cy, palette.PURPLE_LIGHT, 8)
+                    item_logic.damage(self, c)
+
+    def _check_last_standing(self, f: int) -> None:
+        if not self.fmt.early_end or self.ended_early or len(self.sides) < 2:
+            return
+        if len(self.alive_sides()) <= 1:
+            # dernier debout : victoire tout de suite (la durée > 1 min est assurée par le
+            # garde-fou, qui donne plus de vies si la partie pré-simulée finit trop tôt)
+            self.ended_early = True
+            self.battle_end = min(self.battle_end, f + END_DELAY)
+            self.popup("LAST ONE STANDING!", palette.YELLOW_LIGHT, duration=80)
 
     def speed_multiplier(self) -> float:
         """Accélération progressive : x1 au GO, x speed_ramp à la fin du chrono de base
@@ -299,9 +512,12 @@ class Battle:
             if f == self.battle_start:
                 self._start_battle()
             if self.slowmo > 0:
-                # ralenti : la partie n'avance qu'une image sur deux (le chrono, lui, continue)
+                # ralenti : la partie n'avance qu'une image sur deux (une sur trois pendant une
+                # killcam) ; le chrono, lui, continue
                 self.slowmo -= 1
-                skip = self.slowmo % 2 == 1
+                skip = self.slowmo % self.slowmo_rate != 0
+                if self.slowmo == 0:
+                    self.slowmo_rate = 2
             if skip:
                 self._ticks(f)
             else:
@@ -312,6 +528,7 @@ class Battle:
             self._outro(f)
         if not skip:
             self._update_particles()
+        self._update_camera()
         if self.flash > 0:
             self.flash -= 1
         if self.impact > 0:
@@ -384,6 +601,8 @@ class Battle:
                 a, b = self.cubes[pair[0]], self.cubes[pair[1]]
                 self.sparkle(self.layout.arena_x + (a.cx + b.cx) / 2, self.layout.arena_y + (a.cy + b.cy) / 2,
                              palette.WHITE, 4)
+                if self.survival:
+                    self._stomp(a, b)
             self.pair_cooldown[pair] = f
 
         for c in self.cubes:
@@ -397,6 +616,9 @@ class Battle:
         item_logic.update_swipes(self)
         item_logic.update_bombs(self)
         item_logic.update_waves(self)
+        self._storm(f)
+        self._watch_threats()
+        self._check_last_standing(f)
 
         if (f - self.battle_start) % STUCK_CHECK == 0 and f > self.battle_start:
             for c in self.cubes:
@@ -408,29 +630,52 @@ class Battle:
 
         self._ticks(f)
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
+        if (f - self.battle_start) % FPS == 0:
+            self.timeline.append(self.side_values())
         self._lead(f)
 
-    def _lead(self, f: int) -> None:
-        """Annonce « X LEADS! » quand un autre cube prend nettement la tête (pas pendant les
-        dernières secondes, où les scores sont cachés)."""
-        top = int(self.counts.max())
-        if top <= 0 or int((self.counts == top).sum()) != 1:
+    def _stomp(self, a: Cube, b: Cube) -> None:
+        """Formats « survie » : un cube géant (potion) ou lancé (bottes) blesse celui qu'il percute."""
+        if self.allies(a.idx, b.idx):
             return
-        leader = int(self.counts.argmax())
+        for hitter, victim in ((a, b), (b, a)):
+            if hitter.active and (hitter.big or hitter.boots > 0) and not victim.dead and victim.invuln == 0 \
+                    and not (victim.big and not hitter.big):
+                victim.hit_anim = item_logic.HIT_ANIM
+                vx, vy = victim.cx - hitter.cx, victim.cy - hitter.cy
+                d = math.hypot(vx, vy) or 1.0
+                victim.kb_x, victim.kb_y = vx / d * item_logic.KNOCKBACK_SPEED, vy / d * item_logic.KNOCKBACK_SPEED
+                hitter.hits += 1
+                self.popup("STOMP!", variants.colors(hitter.team)[2], duration=50,
+                           anchor="bottom" if victim.cy < self.H / 2 else "top")
+                self.emit("brush_hit")
+                item_logic.damage(self, victim)
+                return
+
+    def _lead(self, f: int) -> None:
+        """Annonce « X LEADS! » quand un autre camp prend nettement la tête (pas pendant les
+        dernières secondes, où les scores sont cachés). Formats « survie » : pas de leader."""
+        if self.survival:
+            return
+        counts = np.array(self.side_counts())
+        top = int(counts.max())
+        if top <= 0 or int((counts == top).sum()) != 1:
+            return
+        leader = int(counts.argmax())
         if self.leader is None:
             self.leader = leader
             return
         if leader == self.leader or self.scores_hidden() or f - self.battle_start < LEAD_START_DELAY:
             return
-        margin = int(self.counts[leader] - self.counts[self.leader])
+        margin = int(counts[leader] - counts[self.leader])
         if margin < LEAD_MARGIN * self.paintable or f - self.last_lead_frame < LEAD_COOLDOWN:
             return
-        self.crown_jump = (self.leader, leader, f)
+        self.crown_jump = (self.sides[self.leader][0], self.sides[leader][0], f)
         self.leader = leader
         self.last_lead_frame = f
         self.lead_changes += 1
         if self.settings.lead_announce:
-            c = self.cubes[leader]
+            c = self.cubes[self.sides[leader][0]]
             self.popup(f"{c.team} LEADS!", variants.colors(c.team)[2], duration=72)
             self.emit("lead_change")
 
@@ -462,7 +707,8 @@ class Battle:
         self.bombs.clear()
         self.waves.clear()
         self.counts = np.bincount(self.grid[self.grid >= 0].ravel(), minlength=len(self.cubes))
-        self.result = compute_result(self.cubes, self.counts, self.paintable)
+        self.result = compute_result(self.cubes, self.counts, self.paintable, self.sides,
+                                     self.fmt.win, max(1, self.start_lives), self.paints)
         r = self.result
         if self.new_outro:
             # END! -> révélation des scores (du dernier au premier, roulement de tambour) -> gagnant
@@ -478,7 +724,7 @@ class Battle:
         if r.winner is not None:
             self.emit("victory", frame=win_at)
             w = r.ranking[0]
-            text = f"{w.team} WINS! {fmt_pct(w.pct)}"
+            text = f"{w.team} WINS! {w.label}"
         else:
             self.emit("draw", frame=win_at)
             text = "TIE! " + " / ".join(self.cubes[i].team for i in r.tied)
@@ -516,11 +762,40 @@ def fmt_pct(p: float) -> str:
     return f"{p:.1f}%"
 
 
-def compute_result(cubes: list[Cube], counts, total_cells: int) -> Result:
-    n = len(cubes)
-    ranked = [Ranked(i, cubes[i].team, int(counts[i]), counts[i] / total_cells * 100, cubes[i].items)
-              for i in range(n)]
+def compute_result(cubes: list[Cube], counts, total_cells: int, sides: list | None = None,
+                   win: str = formats.PAINT, start_lives: int = 1, paints: bool = True) -> Result:
+    """Classement des camps. « paint » : la plus grande surface (départage aux objets ramassés).
+    « survival » : les camps encore debout d'abord (le plus de vies), puis les éliminés du plus
+    tardif au plus précoce ; la peinture (ou les coups portés, sans peinture) départage."""
+    sides = sides or [[i] for i in range(len(cubes))]
+    ranked = []
+    for side in sides:
+        idx = side[0]
+        cells = int(sum(counts[i] for i in side))
+        alive = any(not cubes[i].dead for i in side)
+        lives = sum(cubes[i].lives for i in side if not cubes[i].dead)
+        r = Ranked(idx, cubes[idx].team, cells, cells / total_cells * 100, sum(cubes[i].items for i in side),
+                   alive, lives)
+        r.ko = max(cubes[i].ko_frame for i in side) if not alive else 10 ** 9
+        r.hits = sum(cubes[i].hits for i in side)
+        ranked.append(r)
+    if win == formats.SURVIVAL:
+        def key(r):
+            return (-int(r.alive), -r.lives, -r.ko, -(r.cells if paints else r.hits), -r.items)
+        ranked.sort(key=lambda r: (*key(r), r.idx))
+        full = max(1, start_lives * max(len(s) for s in sides))
+        for r in ranked:
+            r.label = f"{r.lives} HP" if r.alive else "K.O."
+            r.score = r.lives / full if r.alive else 0.04
+        best = [r for r in ranked if key(r) == key(ranked[0])]
+        if len(best) == 1:
+            return Result(ranked, ranked[0].idx, [], False)
+        return Result(ranked, None, [r.idx for r in best], False)
     ranked.sort(key=lambda r: (-r.cells, -r.items, r.idx))
+    top_pct = max(r.pct for r in ranked) or 1.0
+    for r in ranked:
+        r.label = fmt_pct(r.pct)
+        r.score = r.pct / top_pct
     top = ranked[0].cells
     tied = [r for r in ranked if r.cells == top]
     if len(tied) == 1:

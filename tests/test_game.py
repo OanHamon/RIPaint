@@ -73,8 +73,9 @@ def test_cubes_stay_inside_and_never_stuck(seed):
         for c in b.cubes:
             if c.idx in window:
                 start, far, was_stunned = window[c.idx]
+                # (killcam : ralenti x3, le cube avance trois fois moins par seconde de vidéo)
                 window[c.idx] = (start, max(far, math.hypot(c.cx - start[0], c.cy - start[1])),
-                                 was_stunned or c.immobile)
+                                 was_stunned or c.immobile or b.slowmo_rate > 2)
         if (b.frame - b.battle_start) % 60 == 0:
             for c in b.cubes:
                 if c.idx in window:

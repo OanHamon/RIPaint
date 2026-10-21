@@ -32,7 +32,7 @@ def run_preview(settings: Settings, seed: int | None = None) -> None:
     def new_game(s):
         b = Battle(s, settings)
         music_vol = settings.music_volume if settings.music_on() else 0.0
-        player = LivePlayer(bank, s, settings.master_volume, music_vol, settings.paint_sound)
+        player = LivePlayer(bank, s, settings.master_volume, music_vol, settings.paint_sound, b.music_style)
         pygame.display.set_caption(f"Aperçu - seed {s}   [ESPACE pause | R nouvelle partie | S zones | ÉCHAP quitter]")
         return b, Renderer(b), player, 0
 

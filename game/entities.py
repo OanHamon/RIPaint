@@ -37,6 +37,8 @@ class Cube:
     items: int = 0
     last_pos: tuple = (0.0, 0.0)
     still_frames: int = 0
+    ko_frame: int = 0        # image du K.O. (classement des formats « survie »)
+    hits: int = 0            # coups portés aux adversaires (départage en combat)
 
     def __post_init__(self):
         if not self.size:

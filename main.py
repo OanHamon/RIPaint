@@ -5,6 +5,7 @@
   python main.py --gui                 panneau de contrôle (fenêtre)
   python main.py --generate 5          génère 5 vidéos (seeds aléatoires)
   python main.py --generate 1 --seed 1234
+  python main.py --generate 5 --all-random   partie et apparence tirées au hasard pour chaque vidéo
   python main.py --preview [--seed 1234]
 """
 
@@ -19,10 +20,16 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 
-def _generate(count: int, seed_text: str | None, machine: bool) -> int:
+def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool = False) -> int:
+    from game import cup as paintcup
     from game import settings as cfg
-    from output.exporter import export_video, output_dir, seeds_for_batch
+    from game import variety
+    from output.exporter import ensure_cup, export_video, output_dir, plan_for, seeds_for_batch
 
+    try:
+        sys.stdout.reconfigure(errors="replace")   # emojis des légendes dans une console Windows
+    except (AttributeError, ValueError):
+        pass
     settings = cfg.load()
     # restes temporaires d'une génération annulée
     for pattern in ("*.tmp.mp4", "*.tmp.wav", "*.tmp.m4a", "*.ffmpeg.log"):
@@ -31,6 +38,11 @@ def _generate(count: int, seed_text: str | None, machine: bool) -> int:
                 leftover.unlink()
             except OSError:
                 pass
+    if all_random:
+        # « Tout aléatoire » : format, mode, joueurs, concurrents, thème, carte et musique tirés
+        # pour chaque vidéo (avec le garde-fou), sans modifier les réglages enregistrés
+        for key, value in variety.ALL_RANDOM.items():
+            setattr(settings, key, value)
     settings.seed = seed_text or ""   # seed uniquement si passée explicitement (--seed)
     seeds = seeds_for_batch(count, settings)
 
@@ -49,22 +61,34 @@ def _generate(count: int, seed_text: str | None, machine: bool) -> int:
                 say(f"  vidéo {i}/{len(seeds)} : {pct} %")
             last_pct[0] = pct
 
+        # garde-fou : historique des vidéos déjà faites -> choix de celle-ci ; PaintCup : prochain match
+        history = variety.load_history()
+        cup_state = ensure_cup(settings, seed)
+        video_settings, plan, slot = plan_for(seed, settings, history, cup_state)
         if not machine:
-            say(f"Vidéo {i}/{len(seeds)} - seed {seed}")
+            say(f"Vidéo {i}/{len(seeds)} - seed {seed}" + (f"  [{variety.describe(plan)}]" if plan else ""))
         try:
-            res = export_video(seed, settings, progress=progress)
+            res = export_video(seed, video_settings, progress=progress, plan=plan,
+                               recent_captions=[v.get("caption_id") for v in history["videos"]],
+                               cup_state=cup_state, cup_slot=slot)
         except Exception as exc:  # on continue avec les vidéos suivantes
             errors += 1
             say(f"ERROR {seed} {exc!r}" if machine else f"  ERREUR : {exc}")
             continue
+        # seulement une fois la vidéo réussie : historique, coupe
+        variety.save_history(variety.record(history, {**plan, "seed": seed, "caption_id": res.caption_id,
+                                                      "duration": round(res.duration, 1)}))
+        if cup_state is not None and slot is not None:
+            paintcup.save(cup_state)
         if machine:
             say(f"DONE {i} {len(seeds)} {res.path}")
             say("RESULT " + json.dumps({"path": str(res.path), "seed": seed, "duration": res.duration,
                                         "cubes": res.n_cubes, "summary": res.summary,
-                                        "mode": res.mode}, ensure_ascii=False))
+                                        "mode": res.mode, "details": res.details, "caption": res.caption,
+                                        "cup": plan.get("cup", "")}, ensure_ascii=False))
         else:
-            mode = f"mode {res.mode}, " if res.mode else ""
-            say(f"  -> {res.path.name}  ({mode}{res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
+            say(f"  -> {res.path.name}  ({res.details}, {res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
+            say(f"     légende : {res.caption}")
     return 1 if errors else 0
 
 
@@ -109,6 +133,8 @@ def main(argv=None) -> int:
     parser.add_argument("--generate", type=int, metavar="X", help="génère X vidéos")
     parser.add_argument("--preview", action="store_true", help="aperçu temps réel (sans enregistrement)")
     parser.add_argument("--seed", help="seed à utiliser (sinon aléatoire)")
+    parser.add_argument("--all-random", action="store_true",
+                        help="partie et apparence tirées au hasard pour chaque vidéo")
     parser.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)  # sortie pour l'interface
     ui = parser.add_mutually_exclusive_group()
     ui.add_argument("--terminal", action="store_true", help="ouvre l'application terminal")
@@ -116,7 +142,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     if args.generate:
-        return _generate(max(1, args.generate), args.seed, args.progress)
+        return _generate(max(1, args.generate), args.seed, args.progress, args.all_random)
     if args.preview:
         from game import settings as cfg
         from output.exporter import parse_seed

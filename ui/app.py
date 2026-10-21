@@ -23,7 +23,8 @@ from textual.theme import Theme
 from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, RichLog, Static
 
-from game import modes, variants
+from audio import music
+from game import formats, modes, themes, variants
 from game.battle import video_seconds
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
@@ -43,7 +44,8 @@ TEAM_WORDS = {name: colors[1] for name, colors in theme.TEAMS.items()}
 
 # Réglages modifiables depuis l'interface ; les autres clés de config.json sont préservées.
 MANAGED = [f"prob_{k}" for k in ITEM_KINDS] + [
-    "mode", "variant", "paint_pattern", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
+    "mode", "format", "theme", "music_style", "variety", "duration_mix", "caption_auto", "killcam", "cup",
+    "variant", "paint_pattern", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
     "music_enabled", "video_count", "seed", "export_srt"]
 # Compteurs qu'un mode peut imposer : ils affichent alors la valeur du mode
 LOCKABLE = ["cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items",
@@ -66,7 +68,7 @@ def videos_dir(settings: cfg.Settings) -> Path:
 
 def count_videos(settings: cfg.Settings) -> int:
     d = videos_dir(settings)
-    return sum(1 for p in d.glob("combat_*.mp4") if ".tmp" not in p.name) if d.is_dir() else 0
+    return sum(1 for p in d.glob("*.mp4") if ".tmp" not in p.name) if d.is_dir() else 0
 
 
 def fmt_clock(seconds: float) -> str:
@@ -408,9 +410,17 @@ class MainScreen(Screen):
         with Horizontal(id="body"):
             with SettingsColumn(id="left"):
                 with Vertical(classes="panel", id="p-game"):
+                    yield Choice("Format", formats.CHOICES, s.format, id="format")
                     yield Choice("Mode", modes.CHOICES, s.mode, id="mode")
                     yield Static(id="mode-info")
                     yield Choice("Variante", variants.CHOICES, s.variant, id="variant")
+                    yield Choice("Thème d'arène", themes.CHOICES, s.theme, id="theme")
+                    yield Choice("Musique", music.CHOICES, s.music_style, id="music_style")
+                    yield Toggle("Garde-fou anti-répét.", s.variety, id="variety")
+                    yield Toggle("Durées variées", s.duration_mix, id="duration_mix")
+                    yield Toggle("Légende auto", s.caption_auto, id="caption_auto")
+                    yield Toggle("Killcam (zoom K.O.)", s.killcam, id="killcam")
+                    yield Toggle("PaintCup", s.cup, id="cup")
                     yield Toggle("Traînée à motifs", s.paint_pattern, id="paint_pattern")
                     yield Choice("Joueurs", PLAYER_CHOICES, s.players if s.players in (2, 3, 4) else 0,
                                  id="players")
@@ -478,6 +488,11 @@ class MainScreen(Screen):
     def collect(self) -> cfg.Settings:
         s = self.s
         s.mode = self.query_one("#mode", Choice).value
+        s.format = self.query_one("#format", Choice).value
+        s.theme = self.query_one("#theme", Choice).value
+        s.music_style = self.query_one("#music_style", Choice).value
+        for name in ("variety", "duration_mix", "caption_auto", "killcam", "cup"):
+            setattr(s, name, self.query_one(f"#{name}", Toggle).value)
         s.variant = self.query_one("#variant", Choice).value
         s.paint_pattern = self.query_one("#paint_pattern", Toggle).value
         s.players = self.query_one("#players", Choice).value
@@ -505,6 +520,11 @@ class MainScreen(Screen):
         self._loading = True
         try:
             self.query_one("#mode", Choice).set_value(s.mode, notify=False)
+            self.query_one("#format", Choice).set_value(s.format, notify=False)
+            self.query_one("#theme", Choice).set_value(s.theme, notify=False)
+            self.query_one("#music_style", Choice).set_value(s.music_style, notify=False)
+            for name in ("variety", "duration_mix", "caption_auto", "killcam", "cup"):
+                self.query_one(f"#{name}", Toggle).set_value(getattr(s, name), notify=False)
             self.query_one("#variant", Choice).set_value(s.variant, notify=False)
             self.query_one("#paint_pattern", Toggle).set_value(s.paint_pattern, notify=False)
             self.query_one("#players", Choice).set_value(s.players if s.players in (2, 3, 4) else 0, notify=False)
@@ -589,6 +609,8 @@ class MainScreen(Screen):
         spans = [video_seconds(v) for v in variants]
         base, longest = round(min(a for a, _ in spans)), round(max(b for _, b in spans))
         duration = f"{base:g} s" if longest == base else f"{base:g} – {longest:g} s"
+        if s.duration_mix:
+            duration = f"variée : {round(s.long_share * 100)} % > 1 min, le reste 30-50 s"
         files = ".mp4 + .srt" if s.export_srt else ".mp4"
         info = Text()
         for i, (k, v) in enumerate((("Durée par vidéo", duration), ("Sortie", f"{s.output_dir}/  {files}"))):
@@ -678,11 +700,13 @@ class MainScreen(Screen):
                 elif kind == "RESULT":
                     info = json.loads(rest)
                     msg = team_text(f"{Path(info['path']).name}  ", theme.WHITE)
-                    if info.get("mode"):
-                        msg.append(f"{info['mode']} · ", style=f"bold {theme.YELLOW}")
+                    if info.get("details") or info.get("mode"):
+                        msg.append(f"{info.get('details') or info['mode']} · ", style=f"bold {theme.YELLOW}")
                     msg.append(f"{info['duration']:.0f} s · {info['cubes']} cubes · ", style=theme.GREY)
                     msg.append_text(team_text(info["summary"], theme.GREY_LIGHT))
                     self.log_line("✓", msg, theme.GREEN_LIGHT)
+                    if info.get("caption"):
+                        self.log_line("✎", Text(info["caption"], style=theme.GREY_LIGHT), theme.BLUE_LIGHT)
                     arena.announce(f" {info['summary']} ")
                     self.refresh_stats()
                 elif kind == "ERROR":
