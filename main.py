@@ -1,12 +1,13 @@
 """Bataille de cubes 8-bit - générateur de vidéos TikTok.
 
-  python main.py                       ouvre le panneau de contrôle
+  python main.py                       ouvre l'application terminal RIPaint
   python main.py --generate 5          génère 5 vidéos (seeds aléatoires)
   python main.py --generate 1 --seed 1234
   python main.py --preview [--seed 1234]
 """
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -56,6 +57,8 @@ def _generate(count: int, seed_text: str | None, machine: bool) -> int:
             continue
         if machine:
             say(f"DONE {i} {len(seeds)} {res.path}")
+            say("RESULT " + json.dumps({"path": str(res.path), "seed": seed, "duration": res.duration,
+                                        "cubes": res.n_cubes, "summary": res.summary}, ensure_ascii=False))
         else:
             say(f"  -> {res.path.name}  ({res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
     return 1 if errors else 0
@@ -66,7 +69,7 @@ def main(argv=None) -> int:
     parser.add_argument("--generate", type=int, metavar="X", help="génère X vidéos")
     parser.add_argument("--preview", action="store_true", help="aperçu temps réel (sans enregistrement)")
     parser.add_argument("--seed", help="seed à utiliser (sinon aléatoire)")
-    parser.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)  # sortie pour le panneau
+    parser.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)  # sortie pour l'interface
     args = parser.parse_args(argv)
 
     if args.generate:
@@ -79,8 +82,8 @@ def main(argv=None) -> int:
         seed = parse_seed(args.seed)
         run_preview(settings, seed)
         return 0
-    from ui.control_panel import run_panel
-    run_panel()
+    from ui.app import run_app
+    run_app()
     return 0
 
 

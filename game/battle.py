@@ -47,7 +47,8 @@ class Battle:
     def __init__(self, seed: int, settings: Settings):
         self.seed = seed
         self.settings = settings
-        self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right)
+        self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
+                                  settings.centered)
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
         self.scenario = make_scenario(seed, settings, self.W, self.H)
         self.rng = self.scenario.rng

@@ -55,7 +55,7 @@ def test_scenario_rules(seed):
 
 @pytest.mark.parametrize("seed", [3, 17, 99, 2024])
 def test_cubes_stay_inside_and_never_stuck(seed):
-    window = {}   # idx -> (position au début de la fenêtre d'1 s, distance max atteinte, assommé ?)
+    window = {}   # idx -> (position au début de la fenêtre d'1 s, distance max atteinte, assommé ?, ralenti ?)
 
     def check(b):
         for c in b.cubes:
@@ -72,16 +72,17 @@ def test_cubes_stay_inside_and_never_stuck(seed):
             return
         for c in b.cubes:
             if c.idx in window:
-                start, far, was_stunned = window[c.idx]
+                start, far, was_stunned, was_slowed = window[c.idx]
                 window[c.idx] = (start, max(far, math.hypot(c.cx - start[0], c.cy - start[1])),
-                                 was_stunned or c.stun > 0)
+                                 was_stunned or c.stun > 0, was_slowed or c.slow > 0)
         if (b.frame - b.battle_start) % 60 == 0:
             for c in b.cubes:
                 if c.idx in window:
-                    _, far, was_stunned = window[c.idx]
+                    _, far, was_stunned, was_slowed = window[c.idx]
                     if not was_stunned:
-                        assert far > 8, "cube bloqué"
-                window[c.idx] = ((c.cx, c.cy), 0.0, c.stun > 0)
+                        # ralenti, un cube qui rebondit près d'un mur peut rester dans un petit rayon
+                        assert far > (3 if was_slowed else 8), "cube bloqué"
+                window[c.idx] = ((c.cx, c.cy), 0.0, c.stun > 0, c.slow > 0)
 
     run(seed, check=check)
 

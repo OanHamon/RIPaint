@@ -68,6 +68,7 @@ class Settings:
     safe_top: int = 130
     safe_bottom: int = 400
     safe_right: int = 140
+    centered: bool = True             # plateau et textes centrés sur la vidéo
 
     hooks: list = field(default_factory=lambda: list(DEFAULT_HOOKS))
 

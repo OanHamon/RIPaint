@@ -234,7 +234,7 @@ class Renderer:
             if 0 <= age < 60 and not (age > 40 and age % 4 < 2):
                 y = L.hud_y + 4 - age // 6
                 w = font.text_width(text, 2)
-                font.draw(surf, f"+{b.settings.hourglass_bonus:g}S", L.safe_cx + w // 2 + 2, max(L.safe.top, y),
+                font.draw(surf, f"+{b.settings.hourglass_bonus:g}S", L.safe_cx + w // 2 + 2, max(L.top, y),
                           palette.GREEN_LIGHT, 1, "left")
 
     def _popups(self, surf):
@@ -279,13 +279,18 @@ class Renderer:
         pcts = b.percentages()
         n = len(b.cubes)
         slot = w / n
+        labels = {c.idx: f"{round(pcts[c.idx])}%" for c in b.cubes}
+        # arène étroite : sans la petite icône de cube, la couleur du texte suffit
+        with_icon = max(font.text_width(t) for t in labels.values()) + 6 + 3 <= slot
         for c in b.cubes:
-            label = f"{round(pcts[c.idx])}%"
-            lw = font.text_width(label) + 6
+            label = labels[c.idx]
             cx = x0 + slot * (c.idx + 0.5)
-            lx = int(cx - lw / 2)
-            art.draw_cube(surf, lx, y + 10, 5, c.team)
-            font.draw(surf, label, lx + 5, y + 9, palette.TEAMS[c.team][2])
+            if with_icon:
+                lx = int(cx - (font.text_width(label) + 6) / 2)
+                art.draw_cube(surf, lx, y + 10, 5, c.team)
+                font.draw(surf, label, lx + 5, y + 9, palette.TEAMS[c.team][2])
+            else:
+                font.draw(surf, label, int(cx), y + 9, palette.TEAMS[c.team][2], 1, "center")
 
     # ---- Phases --------------------------------------------------------------------------
 
@@ -326,14 +331,30 @@ class Renderer:
         surf.blit(self.shade, (0, 0))
         r = b.result
         t = age - 30
+        # hauteur du contenu, pour centrer l'ensemble sur la vidéo sans sortir de la zone sûre
+        if r.winner is not None:
+            others = r.ranking[1:]
+            above = 12                                  # couronne + rebond
+            content = 36 + 18 + 20 + 20 + (10 if r.by_items else 0) + 2 + 10 * len(others)
+            lines = [(b.cubes[r.winner].team, 2), ("GAGNE !", 2)]
+        else:
+            others = [x for x in r.ranking if x.idx not in r.tied]
+            above = 0
+            content = (22 if len(r.tied) <= 3 else 18) + 6 + 20 + 20 + 2 + 10 * len(others)
+            tie_text = "ÉGALITÉ !" if font.text_width("ÉGALITÉ !", 2) + 8 <= L.safe_w else "ÉGALITÉ"
+            lines = [(tie_text, 2)]
+        lines += [(f"{r.ranking.index(rk) + 1}. {rk.team} {fmt_pct(rk.pct)}", 1) for rk in others]
+        y = LOGICAL_H // 2 - (above + content) // 2 + above
+        y = max(L.safe.top + above, min(y, L.safe_y1 - content - 2))
         # panneau noir uni (déroulé vertical rapide) pour une lisibilité parfaite
         border = palette.TEAMS[b.cubes[r.winner].team][2] if r.winner is not None else palette.WHITE
-        px, py = L.arena_x - WALL, L.safe.top + 20
-        pw, ph_full = b.W + 2 * WALL, L.arena_y + b.H + WALL - py
+        widest = max(font.text_width(text, scale) for text, scale in lines) + 8
+        pw = max(b.W + 2 * WALL, min(L.safe_w, widest))
+        px, py = cx - pw // 2, y + 8
+        ph_full = content - 6
         ph = min(ph_full, 8 + t * 24)
         pygame.draw.rect(surf, palette.BLACK, (px, py + (ph_full - ph) // 2, pw, ph))
         pygame.draw.rect(surf, border, (px, py + (ph_full - ph) // 2, pw, ph), 1)
-        y = L.safe.top + 12
         if r.winner is not None:
             win = b.cubes[r.winner]
             size = min(30, 6 + t * 2)
@@ -356,7 +377,6 @@ class Renderer:
             if r.by_items and t >= 26:
                 font.draw(surf, "(+ D'OBJETS)", cx, y, palette.GREY_LIGHT, 1, "center")
                 y += 10
-            others = r.ranking[1:]
         else:
             tied = [b.cubes[i] for i in r.tied]
             gap = 4
@@ -367,12 +387,11 @@ class Renderer:
                 art.draw_cube(surf, cx - total_w // 2 + k * (size + gap) + (size - s) // 2, y + (size - s), s, c.team)
             y += size + 6
             if t >= 8:
-                font.draw(surf, "ÉGALITÉ !", cx, y, palette.WHITE, 2, "center")
+                font.draw(surf, tie_text, cx, y, palette.WHITE, 2, "center")
             y += 20
             if t >= 16:
                 font.draw(surf, fmt_pct(r.ranking[0].pct), cx, y, palette.YELLOW_LIGHT, 2, "center")
             y += 20
-            others = [x for x in r.ranking if x.idx not in r.tied]
         y += 2
         for k, rk in enumerate(others):
             if t >= 34 + k * 8:

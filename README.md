@@ -14,7 +14,10 @@ couleur qui couvre le plus de surface gagne.
    en cochant **« Add python.exe to PATH »** pendant l'installation.
 2. Double-cliquer sur **`Lancer.bat`**.
    Au premier lancement, il installe automatiquement les dépendances (pygame, numpy, imageio-ffmpeg,
-   qui fournit ffmpeg). Le panneau de contrôle s'ouvre ensuite.
+   qui fournit ffmpeg, et textual pour l'interface). RIPaint s'ouvre ensuite dans le terminal.
+
+Pour le meilleur rendu, utilisez **Windows Terminal** (par défaut sur Windows 11), en plein écran
+ou au moins 100 x 30 caractères.
 
 Installation manuelle équivalente :
 
@@ -24,22 +27,39 @@ python -m pip install -r requirements.txt
 
 ## Utilisation
 
-### Panneau de contrôle (`Lancer.bat` ou `python main.py`)
+### Application terminal (`Lancer.bat` ou `python main.py`)
+
+Au lancement, le logo se peint pendant que RIPaint vérifie ses dépendances (pygame, numpy, ffmpeg,
+dossier de sortie) ; `ENTRÉE` passe l'animation. On arrive ensuite dans l'atelier : les réglages à
+gauche, et à droite une mini-bataille animée, l'avancement de la génération et le journal.
+
+| Touche | Action |
+|---|---|
+| `↑` `↓` / `TAB` | Changer de ligne |
+| `←` `→` | Régler la valeur (`MAJ` + flèche : par 10 ; `DÉBUT` / `FIN` : 0 / 100 sur un curseur) |
+| `ESPACE` | Basculer un interrupteur |
+| `G` | Générer les vidéos |
+| `P` | Aperçu en temps réel avec le son (fenêtre séparée, sans enregistrer) |
+| `ÉCHAP` | Annuler la génération en cours |
+| `O` | Ouvrir le dossier des vidéos |
+| `C` | Ouvrir `config.json` (réglages avancés) |
+| `R` | Recharger `config.json` après l'avoir modifié |
+| `Q` | Quitter (confirmation si une génération est en cours) |
+
+La souris fonctionne aussi : clic ou glisser sur les curseurs, clic sur `◀` `▶`.
 
 | Réglage | Effet |
 |---|---|
-| Probabilité des objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
+| Objets | Un curseur par objet ; le pourcentage **réel** après normalisation est affiché. À 0 : l'objet n'apparaît jamais. |
 | Intervalle | Temps entre deux apparitions d'objets (5 s par défaut). |
-| Objets max en même temps / Sabliers max | Limites (3 / 3 par défaut). |
+| Objets max / Sabliers max | Limites (3 / 3 par défaut). |
 | Volume général / musique | Volume final de la vidéo et niveau de la musique de fond. |
-| Nombre de vidéos (X) | « Générer » crée X parties différentes = X vidéos. |
+| Nombre de vidéos | « Générer » crée X parties différentes = X vidéos. |
 | Seed (optionnelle) | Si remplie, l'aperçu et la génération utilisent cette seed (puis seed+1, seed+2… pour plusieurs vidéos). |
 | Sous-titres .srt | Exporte aussi un fichier .srt à côté de chaque vidéo. |
-| Aperçu | Lance une partie en temps réel avec le son, sans enregistrer. |
-| Ouvrir le dossier des vidéos | Ouvre `videos/`. |
-| Réglages avancés… | Ouvre `config.json` (phrases d'accroche, zones de sécurité, durées, vitesses…). |
 
-Les réglages sont enregistrés automatiquement dans `config.json`.
+Les réglages sont enregistrés automatiquement dans `config.json` ; les clés avancées modifiées à la
+main (accroches, durées…) sont conservées.
 
 **Touches de l'aperçu :** `ESPACE` pause · `R` nouvelle partie · `S` affiche les zones de sécurité TikTok · `ÉCHAP` quitter.
 
@@ -70,6 +90,7 @@ Durée d'une vidéo : 5 s d'intro + 50 s de bataille + 3 s par sablier ramassé 
 |---|---|---|
 | `hooks` | 7 phrases | Phrases d'accroche tirées au hasard pendant l'intro |
 | `safe_top` / `safe_bottom` / `safe_right` | 130 / 400 / 140 | Zones de sécurité TikTok en pixels de la vidéo finale |
+| `centered` | true | Plateau, chrono et écran de fin centrés sur la vidéo (dans la zone de sécurité). `false` : plateau plus grand, calé en haut à gauche |
 | `intro_duration` / `battle_duration` / `outro_duration` | 5 / 50 / 5 | Durées en secondes |
 | `hourglass_bonus` | 3 | Secondes ajoutées par sablier |
 | `aim_duration` | 0.3 | Durée de la ligne de visée du fusil |
@@ -100,12 +121,12 @@ python -m pytest tests
 ## Architecture
 
 ```
-main.py               point d'entrée (panneau / --generate / --preview)
+main.py               point d'entrée (interface / --generate / --preview)
 engine8bit/           MOTEUR RÉUTILISABLE : surface logique, palette NES, police pixel, sprites ASCII, zones de sécurité
 audio/                SYNTHÉ RÉUTILISABLE : oscillateurs + ADSR, bruitages, musique procédurale, mixage
 game/                 LE CONCEPT : réglages, scénario (seed), physique, objets, simulation, dessin
 output/               export MP4 via ffmpeg, sous-titres .srt, aperçu temps réel
-ui/control_panel.py   panneau tkinter
+ui/                   interface terminal (Textual) : démarrage animé, atelier, logo, mini-bataille
 tools/verify_video.py vérification des vidéos produites
 tests/                tests automatiques (pytest)
 ```

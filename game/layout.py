@@ -19,6 +19,7 @@ class Layout:
     safe_x0: int
     safe_x1: int          # bord droit (exclu) de la zone sûre
     safe_y1: int          # bas (exclu) de la zone sûre
+    top: int              # haut du contenu (chrono, accroche, panneau de fin)
 
     @property
     def safe_cx(self) -> int:
@@ -29,10 +30,19 @@ class Layout:
         return self.safe_x1 - self.safe_x0
 
 
-def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 140) -> Layout:
+def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 140,
+                centered: bool = True) -> Layout:
+    """`centered` : marges gauche/droite identiques et bloc (chrono + arène + scores) centré
+    verticalement sur la vidéo, tout en restant dans la zone de sécurité. Sinon le contenu
+    occupe toute la zone sûre (décalé vers le haut et la gauche)."""
     safe = SafeZone(safe_top, safe_bottom, safe_right)
     x0, x1 = safe.left, LOGICAL_W - safe.right
     y0, y1 = safe.top, LOGICAL_H - safe.bottom
+    if centered:
+        side = max(safe.left, safe.right)
+        x0, x1 = side, LOGICAL_W - side
+        half = min(LOGICAL_H // 2 - y0, y1 - LOGICAL_H // 2)
+        y0, y1 = LOGICAL_H // 2 - half, LOGICAL_H // 2 + half
     margin = 2
     hud_y = y0 + 1
     hud_h = 18                      # chrono x2 (14 px) + contour
@@ -47,4 +57,4 @@ def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 1
     arena_x = outer_x0 + WALL + ((outer_x1 - outer_x0 - 2 * WALL) - arena_w) // 2
     arena_y = outer_y0 + WALL
     scores_y = arena_y + arena_h + WALL + 3
-    return Layout(safe, hud_y, arena_x, arena_y, arena_w, arena_h, scores_y, x0, x1, y1)
+    return Layout(safe, hud_y, arena_x, arena_y, arena_w, arena_h, scores_y, x0, x1, y1, y0)
