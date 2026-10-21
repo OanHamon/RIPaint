@@ -86,6 +86,8 @@ def expected_frames(meta: dict) -> tuple[int, int]:
         data.setdefault(f"prob_{kind}", 0)
     data.setdefault("speed_ramp", 1.0)     # pas d'accélération progressive avant cette option
     data.setdefault("obstacles", 0)        # pas d'obstacles avant cette option
+    data.setdefault("arena_centered", False)   # ancienne mise en page (arène dans la zone sûre)
+    data.setdefault("lives", 0)                # pas de vies avant cette option
     b = Battle(int(meta["seed"]), Settings.from_dict(data))
     while not b.done:
         b.step()

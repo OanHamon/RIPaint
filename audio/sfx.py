@@ -68,6 +68,8 @@ _meta("magnet", 7, 0.55)
 _meta("pickup_boots", 7, 0.7, "pickup")
 _meta("boots_end", 5, 0.45)
 _meta("speed_up", 9, 0.7)
+_meta("hurt", 7, 0.55)
+_meta("ko", 9, 0.8)
 
 
 def _noise(dur, rate, vol, a=0.001, d=0.05, s=0.3, r=0.05, seed=1, rate_end=None):
@@ -235,6 +237,14 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
         (concat(*[tone("square", note(x), 0.06, duty=0.5, vol=0.4, a=0.002, r=0.01)
                   for x in ("A5", "A5", "E6")], tone("square", note("A6"), 0.25, duty=0.5, vol=0.4, r=0.12)), 0),
         (tone("triangle", note("A3"), 0.43, vol=0.6, r=0.12), 0),
+    )
+    bank["hurt"] = concat(tone("square", note("E5"), 0.06, duty=0.5, vol=0.4, a=0.001, r=0.01),
+                          tone("square", note("A#4"), 0.1, duty=0.5, vol=0.4, r=0.05))
+    bank["ko"] = overlay(
+        (concat(*[tone("square", note(x), 0.09, duty=0.25, vol=0.4, a=0.002, r=0.02) for x in ("G5", "E5", "C5")],
+                tone("square", note("G4"), 0.35, f_end=note("C4"), duty=0.25, vol=0.4, r=0.2)), 0),
+        (tone("triangle", 160, 0.3, f_end=40, vol=0.9, a=0.001, d=0.1, s=0.4, r=0.15), 0),
+        (_noise(0.15, 3000, 0.4, d=0.05, s=0.3, r=0.08, seed=17), 0),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 

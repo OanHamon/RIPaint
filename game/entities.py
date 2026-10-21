@@ -21,6 +21,10 @@ class Cube:
     magnet: int = 0          # images restantes d'aimant
     boots: int = 0           # images restantes de bottes (vitesse augmentée)
     hit_anim: int = 0        # images restantes de l'animation « touché » (purement visuelle)
+    lives: int = 0           # vies restantes (0 avec l'option désactivée)
+    dead: bool = False       # K.O. : glisse en ralentissant, ne peint plus, ne ramasse plus
+    invuln: int = 0          # images d'invulnérabilité après avoir perdu une vie
+    life_lost: int = 0       # images restantes du clignotement de la vie perdue
     big: bool = False
     resize_anim: int = 0     # images restantes de l'animation grandir/rétrécir
     resize_from: int = 0
@@ -47,8 +51,8 @@ class Cube:
 
     @property
     def immobile(self) -> bool:
-        """Assommé ou gelé : ne bouge plus, ne peint plus, ne ramasse plus."""
-        return self.stun > 0 or self.frozen > 0
+        """Assommé, gelé ou K.O. : n'avance plus de lui-même, ne peint plus, ne ramasse plus."""
+        return self.stun > 0 or self.frozen > 0 or self.dead
 
     @property
     def active(self) -> bool:

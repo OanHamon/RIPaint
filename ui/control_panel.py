@@ -64,6 +64,8 @@ class ControlPanel:
                   foreground="#666").grid(row=3, column=0, columnspan=2, sticky="w")
         self.obstacles = tk.IntVar(value=self.s.obstacles)
         self._spin(box, 4, "Obstacles dans l'arène (0 à 4)", self.obstacles, 0, 4, 1)
+        self.lives = tk.IntVar(value=self.s.lives)
+        self._spin(box, 5, "Vies par cube (0 = illimitées)", self.lives, 0, 5, 1)
 
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
@@ -142,7 +144,7 @@ class ControlPanel:
         ttk.Button(bar2, text="Réglages avancés…", command=self.open_config).pack(side="left", padx=6)
 
         for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size,
-                    self.speed_ramp, self.obstacles):
+                    self.speed_ramp, self.obstacles, self.lives):
             var.trace_add("write", lambda *_: self.on_change())
         self.on_change(save=False)
 
@@ -173,6 +175,7 @@ class ControlPanel:
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
+        s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
         s.speed_ramp = round(min(3.0, max(1.0, float(self._get(self.speed_ramp, s.speed_ramp)))), 2)
         for kind, var in self.prob_vars.items():

@@ -204,11 +204,11 @@ def magnet_icon() -> pygame.Surface:
 
 def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(0.0, 0.0),
               stunned: bool = False, flash: bool = False, frozen: bool = False,
-              hurt: bool = False) -> None:
+              hurt: bool = False, dead: bool = False) -> None:
     """Cube 8-bit : contour noir, corps clair, ombre foncée, reflet, yeux qui regardent
     dans la direction du mouvement (croix si assommé)."""
     dark, mid, light = palette.TEAMS[team]
-    body = palette.WHITE if flash else light
+    body = palette.WHITE if flash else (mid if dead else light)   # K.O. : corps plus terne
     pygame.draw.rect(surf, K, (x, y, size, size))
     if size <= 2:
         return
@@ -230,12 +230,13 @@ def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(
     right = cx + gap - (0 if size % 2 else 1) + ox
     top = cy - e // 2 + oy
     if stunned:
+        g = 1 if (dead and size >= 20) else 0       # croix plus grandes pour un gros cube K.O.
         for ex in (left, right):
-            if e == 1:
+            if e == 1 and not g:
                 surf.set_at((ex, top), K)
             else:
-                pygame.draw.line(surf, K, (ex, top), (ex + e, top + e))
-                pygame.draw.line(surf, K, (ex + e, top), (ex, top + e))
+                pygame.draw.line(surf, K, (ex - g, top - g), (ex + e + g, top + e + g))
+                pygame.draw.line(surf, K, (ex + e + g, top - g), (ex - g, top + e + g))
     elif hurt:
         # yeux plissés (aïe !)
         pygame.draw.rect(surf, K, (left - (1 if e > 1 else 0), top + e // 2, e + (1 if e > 1 else 0), 1))

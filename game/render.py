@@ -274,7 +274,10 @@ class Renderer:
                     color = palette.TEAMS[c.team][1] if k else palette.TEAMS[c.team][2]
                     if (b.frame + k) % 2 == 0:
                         pygame.draw.rect(surf, color, (gx, gy, c.size, c.size), 1)
-            self._draw_cube(surf, c, x, y, look, flash)
+            blink = c.invuln > 0 and not c.dead and c.hit_anim == 0 and (b.frame // 3) % 2 == 1
+            if not blink:                                   # clignotement d'invulnérabilité
+                self._draw_cube(surf, c, x, y, look, flash)
+            self._lives(surf, c, x, y)
             if c.big and (b.frame // 6) % 2 == 0:
                 pygame.draw.rect(surf, palette.MAGENTA, (x - 1, y - 1, c.size + 2, c.size + 2), 1)
             top_y = y - 1
@@ -298,24 +301,45 @@ class Renderer:
                 icon = art.magnet_icon()
                 surf.blit(icon, (x + c.size // 2 - 1, top_y - 3))
                 top_y -= 4
-            if leader == c.idx:
+            if leader == c.idx and not c.dead:
                 cr = art.crown()
                 surf.blit(cr, (x + c.size // 2 - 2, top_y - 3))
+
+    def _lives(self, surf, c, x, y):
+        """Petits points de vie sous le cube (au-dessus s'il touche le bas de l'arène)."""
+        total = self.b.settings.lives
+        if total <= 0 or c.dead:
+            return
+        L = self.L
+        w = total * 3 + 1
+        px = x + c.size // 2 - w // 2
+        py = y + c.size + 1
+        if py + 4 > L.arena_y + self.b.H:
+            py = y - 5
+        pygame.draw.rect(surf, palette.BLACK, (px, py, w, 4))
+        for k in range(total):
+            if k < c.lives:
+                color = palette.WHITE
+            elif k == c.lives and c.life_lost > 0:
+                color = palette.RED if (c.life_lost // 4) % 2 == 0 else palette.WHITE
+            else:
+                color = palette.GREY_DARK
+            pygame.draw.rect(surf, color, (px + 1 + k * 3, py + 1, 2, 2))
 
     def _draw_cube(self, surf, c, x, y, look, flash):
         """Dessine un cube ; s'il vient d'être touché par l'objet d'un autre cube :
         écrasement/étirement élastique, flash blanc, yeux plissés et anneau d'impact."""
         if c.hit_anim <= 0:
-            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0, flash=flash,
-                          frozen=c.frozen > 0)
+            art.draw_cube(surf, x, y, c.size, c.team, look, stunned=c.stun > 0 or c.dead, flash=flash,
+                          frozen=c.frozen > 0, dead=c.dead)
             return
         t = HIT_ANIM - c.hit_anim
         amp = 0.4 * (1 - t / HIT_ANIM) * math.cos(t * 0.75)
         w = max(3, round(c.size * (1 + amp)))
         h = max(3, round(c.size * (1 - amp)))
         tmp = pygame.Surface((c.size + 2, c.size + 2), pygame.SRCALPHA)
-        art.draw_cube(tmp, 1, 1, c.size, c.team, look, stunned=c.stun > 0, flash=flash or t < 4,
-                      frozen=c.frozen > 0, hurt=True)
+        art.draw_cube(tmp, 1, 1, c.size, c.team, look, stunned=c.stun > 0 or c.dead, flash=flash or t < 4,
+                      frozen=c.frozen > 0, hurt=not c.dead, dead=c.dead)
         scaled = pygame.transform.scale(tmp, (w + 2, h + 2))
         cx, cy = x + c.size / 2, y + c.size / 2
         surf.blit(scaled, (round(cx - (w + 2) / 2), round(cy - (h + 2) / 2)))
@@ -348,13 +372,13 @@ class Renderer:
             color = palette.RED if (b.frame // 10) % 2 == 0 else palette.YELLOW
         if b.timer_flash > 0:
             color = palette.GREEN_LIGHT if (b.timer_flash // 5) % 2 == 0 else palette.WHITE
-        font.draw(surf, text, L.safe_cx, L.hud_y, color, 2, "center")
+        font.draw(surf, text, L.center_x, L.hud_y, color, 2, "center")
         for start in b.bonus_anims:
             age = b.frame - start
             if 0 <= age < 60 and not (age > 40 and age % 4 < 2):
                 y = L.hud_y + 4 - age // 6
                 w = font.text_width(text, 2)
-                font.draw(surf, f"+{b.settings.hourglass_bonus:g}S", L.safe_cx + w // 2 + 2, max(L.safe.top, y),
+                font.draw(surf, f"+{b.settings.hourglass_bonus:g}S", L.center_x + w // 2 + 2, max(L.safe.top, y),
                           palette.GREEN_LIGHT, 1, "left")
 
     def _popups(self, surf):
@@ -411,13 +435,14 @@ class Renderer:
 
     def _intro(self, surf):
         b, L = self.b, self.L
-        lines = font.wrap(b.hook, L.safe_w - 2)
+        bx, bw = L.arena_x - WALL, b.W + 2 * WALL          # bandeau aligné sur l'arène
+        lines = font.wrap(b.hook, bw - 2)
         h = len(lines) * 10 + 2
-        pygame.draw.rect(surf, palette.BLACK, (L.safe_x0, L.hud_y - 1, L.safe_w, h + 1))
-        pygame.draw.rect(surf, palette.YELLOW, (L.safe_x0, L.hud_y - 1, L.safe_w, h + 1), 1)
+        pygame.draw.rect(surf, palette.BLACK, (bx, L.hud_y - 1, bw, h + 1))
+        pygame.draw.rect(surf, palette.YELLOW, (bx, L.hud_y - 1, bw, h + 1), 1)
         color = palette.YELLOW_LIGHT if (b.frame // 30) % 2 == 0 else palette.WHITE
         for i, line in enumerate(lines):
-            font.draw(surf, line, L.safe_cx, L.hud_y + 1 + i * 10, color, 1, "center")
+            font.draw(surf, line, L.center_x, L.hud_y + 1 + i * 10, color, 1, "center")
         remaining = b.battle_start - b.frame
         n = math.ceil(remaining / FPS)
         age = FPS - (remaining - (n - 1) * FPS)
@@ -437,9 +462,9 @@ class Renderer:
     def _outro(self, surf):
         b, L = self.b, self.L
         age = b.frame - b.battle_end
-        cx = L.safe_cx
+        cx = L.center_x
         if age < 30:
-            font.draw(surf, "0", L.safe_cx, L.hud_y, palette.RED, 2, "center")
+            font.draw(surf, "0", L.center_x, L.hud_y, palette.RED, 2, "center")
             if age % 6 < 4:
                 font.draw(surf, "END!", L.arena_x + b.W // 2, L.arena_y + b.H // 2 - 14, palette.RED, 4, "center")
             return

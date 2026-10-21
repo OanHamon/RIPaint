@@ -26,10 +26,11 @@ WAVE_SPEED = 3.0           # px logiques par image
 KNOCKBACK_SPEED = 150.0
 RESIZE_FRAMES = 24
 HIT_ANIM = 24              # durée de l'animation « touché » (écrasement/étirement)
+INVULN = 45                # invulnérabilité après une vie perdue (0,75 s)
 
 
 def nearest_opponent(b: "Battle", cube: Cube) -> Cube | None:
-    others = [c for c in b.cubes if c.idx != cube.idx]
+    others = [c for c in b.cubes if c.idx != cube.idx and not c.dead]
     if not others:
         return None
     return min(others, key=lambda c: ((c.cx - cube.cx) ** 2 + (c.cy - cube.cy) ** 2, c.idx))
@@ -144,10 +145,11 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     elif item.kind == "ice":
         frames = round(s.ice_duration * 60)
         for c in b.cubes:
-            if c.idx != cube.idx:
+            if c.idx != cube.idx and not c.dead:
                 c.frozen = frames
                 c.kb_x = c.kb_y = 0.0
                 c.hit_anim = HIT_ANIM
+                damage(b, c, can_ko=False)   # la glace touche tout le monde : elle ne peut pas achever
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.SKY, 10)
         b.emit("freeze")
     elif item.kind == "magnet":
@@ -235,7 +237,11 @@ def update_bullets(b: "Battle") -> None:
                 hit.kb_x = hit.kb_y = 0.0
                 hit.hit_anim = HIT_ANIM
                 b.emit("bullet_hit")
-                b.emit("stun", frame=b.frame + 6)
+                hit.kb_x, hit.kb_y = bullet.dx * 50, bullet.dy * 50
+                damage(b, hit)
+                if not hit.dead:
+                    hit.kb_x = hit.kb_y = 0.0
+                    b.emit("stun", frame=b.frame + 6)
                 bullet.alive = False
                 break
         bullet.trail.append((bullet.x, bullet.y))
@@ -274,6 +280,7 @@ def update_swipes(b: "Battle") -> None:
                 c.kb_x, c.kb_y = kx * KNOCKBACK_SPEED, ky * KNOCKBACK_SPEED
                 c.slow = round(s.slow_duration * 60)
                 c.hit_anim = HIT_ANIM
+                damage(b, c)
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
                 b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.TEAMS[owner.team][1], 8)
@@ -309,6 +316,7 @@ def update_bombs(b: "Battle") -> None:
                     kx, ky = math.cos(a), math.sin(a)
                 c.kb_x, c.kb_y = kx * BOMB_KNOCKBACK, ky * BOMB_KNOCKBACK
                 c.hit_anim = HIT_ANIM
+                damage(b, c)
         ax, ay = b.layout.arena_x + bomb.x, b.layout.arena_y + bomb.y
         b.sparkle(ax, ay, palette.YELLOW_LIGHT, 14)
         b.sparkle(ax, ay, palette.WHITE, 10)
@@ -332,6 +340,10 @@ def update_cube_timers(b: "Battle", cube: Cube) -> None:
         cube.magnet -= 1
     if cube.hit_anim > 0:
         cube.hit_anim -= 1
+    if cube.invuln > 0:
+        cube.invuln -= 1
+    if cube.life_lost > 0:
+        cube.life_lost -= 1
     if cube.boots > 0:
         cube.boots -= 1
         if cube.boots == 0:
@@ -397,5 +409,41 @@ def update_waves(b: "Battle") -> None:
                 w.hit.add(c.idx)
                 c.hit_anim = HIT_ANIM
                 b.emit("splat", gain=0.6)
+                damage(b, c)                      # la vague retire aussi une vie
         if w.origin - d1 <= 0 and w.origin + d1 >= length:
             b.waves.remove(w)
+
+
+# ---- Vies et K.O. ----------------------------------------------------------------------
+
+def damage(b: "Battle", cube: Cube, can_ko: bool = True) -> None:
+    """Le cube est touché par l'objet d'un adversaire : il perd une vie (sauf invulnérable).
+    `can_ko=False` : le coup ne peut pas faire tomber la dernière vie (glace, qui touche tous
+    les adversaires à la fois : sinon un cube pourrait éliminer tout le monde en deux glaces)."""
+    if b.settings.lives <= 0 or cube.dead or cube.invuln > 0:
+        return
+    if not can_ko and cube.lives <= 1:
+        return
+    cube.lives -= 1
+    cube.invuln = INVULN
+    cube.life_lost = 40
+    if cube.lives <= 0:
+        knock_out(b, cube)
+    else:
+        b.emit("hurt", frame=b.frame + 3)
+
+
+def knock_out(b: "Battle", cube: Cube) -> None:
+    """K.O. : le cube glisse sur sa lancée (plus le coup reçu) en ralentissant, yeux en croix."""
+    s = b.settings
+    v = s.cube_speed * b.speed_multiplier() * 1.4
+    cube.kb_x += cube.dx * v
+    cube.kb_y += cube.dy * v
+    cube.dead = True
+    cube.stun = cube.frozen = cube.slow = cube.boots = cube.roller = cube.magnet = 0
+    b.aims = [a for a in b.aims if a.shooter != cube.idx and a.target != cube.idx]
+    light = palette.TEAMS[cube.team][2]
+    anchor = "bottom" if cube.cy < b.H / 2 else "top"
+    b.popup(f"{cube.team} K.O.!", light, anchor=anchor)
+    b.emit("ko")
+    b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy, palette.WHITE, 14)

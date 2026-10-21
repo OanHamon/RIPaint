@@ -21,6 +21,11 @@ class Layout:
     safe_y1: int          # bas (exclu) de la zone sûre
 
     @property
+    def center_x(self) -> int:
+        """Centre horizontal de l'arène : le chrono, l'accroche et l'écran de fin s'y alignent."""
+        return self.arena_x + self.arena_w // 2
+
+    @property
     def safe_cx(self) -> int:
         return (self.safe_x0 + self.safe_x1) // 2
 
@@ -29,7 +34,13 @@ class Layout:
         return self.safe_x1 - self.safe_x0
 
 
-def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 140) -> Layout:
+RIGHT_TOLERANCE = 2   # pixels logiques tolérés sous la colonne des boutons TikTok
+
+
+def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 140,
+                centered: bool = True) -> Layout:
+    """`centered` : arène centrée sur l'écran (sa largeur est réduite pour ne pas passer sous les
+    boutons TikTok de droite) ; sinon centrée dans la zone sûre (ancienne mise en page)."""
     safe = SafeZone(safe_top, safe_bottom, safe_right)
     x0, x1 = safe.left, LOGICAL_W - safe.right
     y0, y1 = safe.top, LOGICAL_H - safe.bottom
@@ -40,11 +51,15 @@ def make_layout(safe_top: int = 130, safe_bottom: int = 400, safe_right: int = 1
     outer_x0, outer_x1 = x0 + margin, x1 - margin
     outer_y0 = hud_y + hud_h + 1
     outer_y1 = y1 - scores_h - 2
-    arena_w = (outer_x1 - outer_x0 - 2 * WALL) // 2 * 2
-    arena_h = (outer_y1 - outer_y0 - 2 * WALL) // 2 * 2
-    arena_w = max(40, arena_w)
-    arena_h = max(40, arena_h)
-    arena_x = outer_x0 + WALL + ((outer_x1 - outer_x0 - 2 * WALL) - arena_w) // 2
+    arena_h = max(40, (outer_y1 - outer_y0 - 2 * WALL) // 2 * 2)
+    if centered:
+        cx = LOGICAL_W / 2
+        room = min(cx - outer_x0, x1 + RIGHT_TOLERANCE - cx)
+        arena_w = max(40, (int(2 * room) - 2 * WALL) // 2 * 2)
+        arena_x = int(round(cx - arena_w / 2))
+    else:
+        arena_w = max(40, (outer_x1 - outer_x0 - 2 * WALL) // 2 * 2)
+        arena_x = outer_x0 + WALL + ((outer_x1 - outer_x0 - 2 * WALL) - arena_w) // 2
     arena_y = outer_y0 + WALL
     scores_y = arena_y + arena_h + WALL + 3
     return Layout(safe, hud_y, arena_x, arena_y, arena_w, arena_h, scores_y, x0, x1, y1)

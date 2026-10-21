@@ -48,7 +48,8 @@ class Battle:
     def __init__(self, seed: int, settings: Settings):
         self.seed = seed
         self.settings = settings
-        self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right)
+        self.layout = make_layout(settings.safe_top, settings.safe_bottom, settings.safe_right,
+                                  settings.arena_centered)
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
         # obstacles d'abord (générateur à part), puis les cubes qui les évitent
         self.obstacles = make_obstacles(seed, settings.obstacles, settings.cube_size, self.W, self.H)
@@ -61,6 +62,7 @@ class Battle:
                       for i, c in enumerate(self.scenario.cubes)]
         for c in self.cubes:
             c.last_pos = (c.cx, c.cy)
+            c.lives = max(0, settings.lives)
         for x0, y0, x1, y1 in self.obstacles:
             self.grid[y0:y1, x0:x1] = physics.OBSTACLE
         self.paintable = int((self.grid != physics.OBSTACLE).sum())   # cases qui comptent pour le score

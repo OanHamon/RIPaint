@@ -137,7 +137,7 @@ def test_items_not_spawned_on_cubes_or_walls():
 
 
 def test_gun_fires_bullet_and_stuns():
-    s = only("gun", item_interval=1.0, max_items=4)
+    s = only("gun", item_interval=1.0, max_items=4, lives=0)    # sans vies : personne n'est K.O.
     stunned = []
     run(21, s, check=lambda b: stunned.extend(c.idx for c in b.cubes if c.stun > 0))
     b = run(21, s)
@@ -217,11 +217,15 @@ def test_render_all_phases_without_error():
 
 
 def test_hud_inside_safe_zone():
+    from game.layout import RIGHT_TOLERANCE
     b = Battle(5, Settings())
     L = b.layout
     assert L.hud_y >= L.safe.top
-    assert L.arena_x + b.W + 2 <= L.safe_x1
+    assert abs((L.arena_x + b.W / 2) - 135 / 2) <= 1                 # arène centrée sur l'écran
+    assert L.arena_x + b.W + 2 <= L.safe_x1 + RIGHT_TOLERANCE       # presque rien sous les boutons
     assert L.scores_y + 20 <= L.safe_y1
+    old = Battle(5, Settings(arena_centered=False)).layout          # ancienne mise en page intacte
+    assert (old.arena_x, old.arena_w) == (4, 108)
 
 
 @pytest.mark.parametrize("players", [2, 3, 4])
@@ -507,3 +511,99 @@ def test_bullet_splats_on_obstacle():
 
 def test_obstacles_option_saved_from_settings():
     assert Settings().obstacles == 3
+
+
+
+# ---- Vies et K.O. ----------------------------------------------------------------------
+
+def _two_cubes(lives=3, seed=120):
+    b = Battle(seed, only("gun", item_interval=999, lives=lives, obstacles=0, players=2))
+    while b.frame < b.battle_start + 5:
+        b.step()
+    return b, b.cubes[0], b.cubes[1]
+
+
+def test_lives_lost_on_hits_with_invulnerability():
+    from game import items
+    b, a, v = _two_cubes()
+    assert v.lives == 3
+    items.damage(b, v)
+    assert v.lives == 2 and v.invuln > 0
+    items.damage(b, v)                       # encore invulnérable : pas de vie perdue
+    assert v.lives == 2
+    v.invuln = 0
+    items.damage(b, v)
+    assert v.lives == 1 and not v.dead
+    assert sum(e.name == "hurt" for e in b.events) == 2
+
+
+def test_knock_out_slides_then_stops_and_stops_painting():
+    from game import items
+    b, a, v = _two_cubes()
+    v.lives = 1
+    items.damage(b, v)
+    assert v.dead and not v.active
+    assert any(e.name == "ko" for e in b.events)
+    assert any(t.endswith("K.O.!") for _, _, t in b.subtitles)
+    speeds = []
+    for _ in range(150):
+        before = (v.cx, v.cy)
+        painted_before = int((b.grid == v.idx).sum())
+        b.step()
+        speeds.append(math.hypot(v.cx - before[0], v.cy - before[1]))
+        assert int((b.grid == v.idx).sum()) <= painted_before     # ne peint plus
+    assert speeds[0] > 0.5                                         # glisse au début...
+    assert speeds[-1] < 0.05                                       # ... puis s'arrête
+    assert max(speeds[60:]) < max(speeds[:10])                     # en ralentissant
+
+
+def test_dead_cube_not_targeted_and_cannot_pick_up():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    v.lives = 1
+    items.damage(b, v)
+    assert items.nearest_opponent(b, a) is None
+    b.items.append(Item("potion", v.cx, v.cy, -100))
+    items.check_pickups(b)
+    assert b.items and v.items == 0
+
+
+def test_zero_lives_means_nobody_dies():
+    b = run(130, only("gun", item_interval=1.0, max_items=4, lives=0))
+    assert not any(c.dead for c in b.cubes)
+    assert not any(e.name in ("hurt", "ko") for e in b.events)
+
+
+def test_full_game_with_lives_renders_and_finishes():
+    seen_dead = []
+    b = run(131, only("bomb", item_interval=1.0, max_items=4, lives=1),
+            check=lambda b: seen_dead.extend(c.idx for c in b.cubes if c.dead))
+    assert seen_dead and b.result is not None
+    r = Renderer(b)
+    r.draw(pygame.Surface((135, 240)))
+
+
+def test_ice_and_wave_also_cost_a_life():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    items.pickup(b, a, Item("ice", a.cx, a.cy, 0))
+    assert v.lives == 2 and a.lives == 3
+    b2, a2, v2 = _two_cubes(seed=121)
+    v2.cx, v2.cy = a2.cx + 30 if a2.cx < b2.W / 2 else a2.cx - 30, a2.cy
+    items.pickup(b2, a2, Item("bucket", a2.cx, a2.cy, 0))
+    w = b2.waves[0]
+    for _ in range(200):
+        items.update_waves(b2)
+    assert (v2.lives == 2) == (v2.idx in w.hit)
+
+
+
+def test_ice_cannot_finish_off_a_cube():
+    from game import items
+    from game.entities import Item
+    b, a, v = _two_cubes()
+    v.lives = 1
+    items.pickup(b, a, Item("ice", a.cx, a.cy, 0))
+    assert v.lives == 1 and not v.dead and v.frozen > 0

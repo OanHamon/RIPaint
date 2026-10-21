@@ -9,6 +9,7 @@ from .entities import Cube
 
 DT = 1 / 60
 KB_DECAY = 0.88                 # amortissement par image de la vitesse de recul
+DEAD_DECAY = 0.965              # glissade d'un cube K.O. : ralentit doucement jusqu'à l'arrêt
 MIN_COMPONENT = math.sin(math.radians(20))
 BOUNCE_JITTER = math.radians(6)
 OBSTACLE = -2                   # valeur des cases d'obstacle dans la grille (jamais peintes)
@@ -116,8 +117,9 @@ def move(cube: Cube, speed: float, w: int, h: int, obstacles=()) -> bool:
     v = 0.0 if cube.immobile else speed
     cube.cx += cube.dx * v * DT + cube.kb_x * DT
     cube.cy += cube.dy * v * DT + cube.kb_y * DT
-    cube.kb_x *= KB_DECAY
-    cube.kb_y *= KB_DECAY
+    decay = DEAD_DECAY if cube.dead else KB_DECAY
+    cube.kb_x *= decay
+    cube.kb_y *= decay
     if abs(cube.kb_x) < 0.5:
         cube.kb_x = 0.0
     if abs(cube.kb_y) < 0.5:
