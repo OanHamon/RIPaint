@@ -95,6 +95,7 @@ class Settings:
     slowmo: bool = True               # ralenti sur les K.O. et les explosions
     nicknames: bool = True            # surnoms des cubes (« RED BLAZE »)
     league: bool = True               # classement des couleurs conservé d'une vidéo à l'autre
+    follow_prompt: bool = True        # animation « abonne-toi » pendant le compte à rebours
     tiktok_rewards: bool = True       # vidéo toujours > 1 min (Creator Rewards Program)
     min_video_duration: float = 62.0  # durée minimale visée quand tiktok_rewards est actif
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4

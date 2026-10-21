@@ -136,6 +136,8 @@ Déroulé d'une vidéo (réglages par défaut) :
 
 1. **Teaser (0,8 s)** : l'arène telle qu'elle sera à la fin, « WHO WINS? », puis un « rembobinage ».
 2. **Compte à rebours 3-2-1** : les cubes trépignent, leur surnom s'affiche (« SHADOW », « FROST »…).
+   Animation « abonne-toi » : un avatar-cube avec un badge « + », une main-curseur appuie dessus,
+   le « + » devient une coche (« FOLLOW FOR MORE! » → « THANKS! »). Style 8-bit, sans logo TikTok.
 3. **Bataille** : allongée automatiquement pour que la vidéo dépasse toujours 1 minute (51,2 s),
    +3 s par sablier. Annonces « X LEADS! » quand un cube prend nettement la tête, ralentis sur les
    K.O. et explosions, pourcentages cachés (« ??% ») pendant les 5 dernières secondes.
@@ -183,6 +185,7 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `hide_final_scores` | 5 | Secondes de fin où les % sont cachés (0 = jamais) |
 | `comeback` | 0.5 | Probabilité qu'un objet apparaisse près du cube en dernière place |
 | `lead_announce` / `slowmo` / `nicknames` / `league` | true | Annonces de leader, ralentis, surnoms, ligue |
+| `follow_prompt` | true | Animation « abonne-toi » pendant le compte à rebours (aucun cube ne démarre sous l'encadré) |
 | `hourglass_bonus` | 3 | Secondes ajoutées par sablier |
 | `aim_duration` | 0.3 | Durée de la ligne de visée du fusil |
 | `stun_duration` / `slow_duration` / `potion_duration` | 5 / 3 / 5 | Durées des effets |

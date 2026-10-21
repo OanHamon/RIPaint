@@ -116,6 +116,7 @@ class ControlPanel:
             ("slowmo", "Ralenti sur les K.O. et les explosions"),
             ("nicknames", "Surnoms des cubes (RED BLAZE…)"),
             ("league", "Ligue : classement des couleurs entre les vidéos"),
+            ("follow_prompt", "Animation « abonne-toi » pendant le 3-2-1"),
         ]
         values = {"hide_scores": self.s.hide_final_scores > 0, "comeback": self.s.comeback > 0}
         for r, (key, label) in enumerate(options):
@@ -242,6 +243,7 @@ class ControlPanel:
         s.slowmo = f["slowmo"]
         s.nicknames = f["nicknames"]
         s.league = f["league"]
+        s.follow_prompt = f["follow_prompt"]
         s.duel_lives = min(6, max(1, int(self._get(self.duel_lives, s.duel_lives))))
         s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))

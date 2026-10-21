@@ -33,6 +33,8 @@ END_FRAMES = 30             # « END! »
 REVEAL_FRAMES = 150         # révélation des scores un par un, avec roulement de tambour
 LOOP_FRAMES = 30            # retour à l'image d'ouverture (la vidéo boucle sans couture)
 SLOWMO_FRAMES = 30          # ralenti : 0,5 s de vidéo à demi-vitesse
+FOLLOW_TAP = 84             # image (depuis le début du 3-2-1) où la main appuie sur « + »
+FOLLOW_BOX_H = 30           # hauteur de l'encadré « FOLLOW FOR MORE! » (en haut de l'arène)
 LEAD_COOLDOWN = 360         # au moins 6 s entre deux « X LEADS! »
 LEAD_MARGIN = 0.03          # nouvelle tête annoncée seulement avec 3 points d'avance
 LEAD_START_DELAY = 240      # pas d'annonce de leader pendant les 4 premières secondes
@@ -86,8 +88,11 @@ class Battle:
         self.W, self.H = self.layout.arena_w, self.layout.arena_h
         # obstacles d'abord (générateur à part), puis les cubes qui les évitent
         self.map_name, self.obstacles = maps.build(seed, settings, self.W, self.H)
+        strict = getattr(settings, "map", "generated") != "generated"
+        # animation « abonne-toi » : aucun cube ne démarre sous l'encadré du haut de l'arène
+        reserved = 4 + FOLLOW_BOX_H + 12 + settings.cube_size / 2 if (settings.follow_prompt and strict) else 0
         self.scenario = make_scenario(seed, settings, self.W, self.H, self.obstacles,
-                                      strict=getattr(settings, "map", "generated") != "generated")
+                                      strict=strict, top_reserved=reserved)
         self.rng = self.scenario.rng
         self.fx = random.Random(seed * 31 + 7)        # aléatoire purement visuel
         self.hook = self.scenario.hook
@@ -318,6 +323,11 @@ class Battle:
             self.shake -= 1
 
     def _intro(self, f: int) -> None:
+        if self.settings.follow_prompt:
+            if f == self.intro_start:
+                self.subtitle(f, self.battle_start, "FOLLOW FOR MORE!")
+            if f == self.intro_start + FOLLOW_TAP:
+                self.emit("follow_tap")
         if (self.battle_start - f) % FPS == 0:
             n = (self.battle_start - f) // FPS
             self.emit("count")

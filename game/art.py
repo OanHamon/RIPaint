@@ -172,6 +172,19 @@ HEART = (
     "....K....",
 )
 
+HAND = (
+    "...KK.....",
+    "..KWWK....",
+    "..KWWK....",
+    "..KWWKKKK.",
+    "KKKWWWWWWK",
+    "KWKWWWWWWK",
+    "KWWWWWWWWK",
+    ".KWWWWWWWK",
+    "..KWWWWWK.",
+    "...KKKKK..",
+)
+
 MINI_ROLLER = (
     "KKKKK",
     "KWWWK",
@@ -204,6 +217,10 @@ def crown() -> pygame.Surface:
 
 def slow_icon() -> pygame.Surface:
     return sprite(SLOW, COLORS)
+
+
+def hand() -> pygame.Surface:
+    return sprite(HAND, COLORS)
 
 
 def roller_icon() -> pygame.Surface:

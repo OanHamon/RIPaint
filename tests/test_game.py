@@ -507,11 +507,14 @@ def test_bullet_splats_on_obstacle():
     cy = (y0 + y1) / 2
     for c in b.cubes:                                       # personne sur la trajectoire
         c.cx, c.cy = b.W / 2, 4 + c.half
-    b.bullets.append(Bullet(0, 2.0, cy, 1.0, 0.0))
+    bullet = Bullet(0, 2.0, cy, 1.0, 0.0)
+    b.bullets.append(bullet)
     for _ in range(60):
         items.update_bullets(b)
     assert not b.bullets and any(e.name == "splat" for e in b.events)
-    assert int((b.grid[int(cy), x1:] == 0).sum()) == 0      # rien n'a traversé l'obstacle
+    assert bullet.x < x0 + 1                                # la balle s'arrête devant l'obstacle
+    # sa traînée (pas les gouttelettes de l'éclaboussure) ne continue pas derrière
+    assert all(x < x0 + 1 for x, _ in bullet.trail)
 
 
 def test_obstacles_option_saved_from_settings():

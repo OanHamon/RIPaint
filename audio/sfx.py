@@ -75,6 +75,7 @@ _meta("reveal_ding", 9, 0.6, "reveal")
 _meta("lead_change", 8, 0.6)
 _meta("slowmo", 8, 0.6)
 _meta("slash", 8, 0.6)
+_meta("follow_tap", 8, 0.6)
 _meta("pickup_heart", 7, 0.7, "pickup")
 _meta("ko", 9, 0.8)
 
@@ -288,6 +289,12 @@ def build_bank(aim_duration: float = 0.3) -> dict[str, np.ndarray]:
     bank["pickup_heart"] = overlay(
         (_jingle(["C5", "E5", "G5", "C6", "G5", "C6", "E6"], 0.045, wave="triangle", vol=0.6), 0),
         (_jingle(["E6", "G6", "C7"], 0.06, duty=0.125, vol=0.25), 0.18),
+    )
+    # « tap » sur le bouton + : clic sec puis petit carillon de validation
+    bank["follow_tap"] = overlay(
+        (tone("square", 1800, 0.025, f_end=900, duty=0.5, vol=0.4, a=0.0005, d=0.01, s=0.3, r=0.01), 0),
+        (_noise(0.02, 12000, 0.3, seed=21), 0),
+        (arpeggio([note(x) for x in ("E6", "G#6", "B6", "E7")], 0.045, "square", 0.3, 0.25), 0.05),
     )
     bank["magnet"] = tone("square", 220, 0.6, duty=0.25, vol=0.35, vibrato=0.15, vib_rate=12, r=0.15)
 

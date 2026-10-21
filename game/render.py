@@ -9,7 +9,7 @@ from engine8bit import font, palette
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W
 
 from . import art
-from .battle import (END_FRAMES, LOOP_FRAMES, REVEAL_FRAMES, REWIND_FRAMES, TEASER_FRAMES, Battle,
+from .battle import (END_FRAMES, FOLLOW_BOX_H, FOLLOW_TAP, LOOP_FRAMES, REVEAL_FRAMES, REWIND_FRAMES, TEASER_FRAMES, Battle,
                      fmt_pct)
 from .items import HIT_ANIM, SPAWN_ANIM
 from .layout import WALL
@@ -517,6 +517,8 @@ class Renderer:
     def _intro(self, surf):
         b, L = self.b, self.L
         self._hook_banner(surf)
+        if b.settings.follow_prompt:
+            self._follow_prompt(surf, b.frame - b.intro_start, b.battle_start - b.intro_start)
         remaining = b.battle_start - b.frame
         n = math.ceil(remaining / FPS)
         age = FPS - (remaining - (n - 1) * FPS)
@@ -534,6 +536,69 @@ class Renderer:
                              (band[0] + band[2] - 1, band[1] + band[3] - 1))
             for i, line in enumerate(lines):
                 font.draw(surf, line, L.arena_x + b.W // 2, y + i * 16, b.mode.color, 2, "center")
+
+    def _follow_prompt(self, surf, t, total):
+        """Incitation à s'abonner (style 8-bit, sans logo) : un avatar-cube avec un badge « + »,
+        une main-curseur qui appuie dessus, le « + » devient une coche."""
+        b, L = self.b, self.L
+        w, h = b.W - 6, FOLLOW_BOX_H
+        x0 = L.arena_x + 3
+        top_side = True                                    # bande réservée : aucun cube dessous
+        y_final = L.arena_y + 4
+        # l'encadré glisse depuis le bord de l'arène, puis repart juste avant le GO
+        slide = max(0.0, min(1.0, (t + 1) / 10, (total - t) / 10))
+        offset = int((1 - slide) * (h + 6))
+        y0 = y_final - offset if top_side else y_final + offset
+        clip = surf.get_clip()
+        surf.set_clip((L.arena_x, L.arena_y, b.W, b.H))
+        pygame.draw.rect(surf, palette.BLACK, (x0, y0, w, h))
+        pygame.draw.rect(surf, palette.RED, (x0, y0, w, h), 1)
+        # avatar : cercle + cube du premier joueur
+        ax, ay = x0 + 15, y0 + 13
+        pygame.draw.circle(surf, palette.WHITE, (ax, ay), 10)
+        pygame.draw.circle(surf, palette.NAVY, (ax, ay), 9)
+        art.draw_cube(surf, ax - 5, ay - 6, 11, b.cubes[0].team)
+        # badge sous l'avatar : « + » rouge, puis coche après l'appui
+        bx, by = ax, ay + 10
+        tapped = t >= FOLLOW_TAP
+        pressed = FOLLOW_TAP - 4 <= t < FOLLOW_TAP + 4
+        r = 3 if pressed else 4
+        if not tapped:
+            pygame.draw.circle(surf, palette.BLACK, (bx, by), r + 1)
+            pygame.draw.circle(surf, palette.RED, (bx, by), r)
+            pygame.draw.line(surf, palette.WHITE, (bx - 2, by), (bx + 2, by))
+            pygame.draw.line(surf, palette.WHITE, (bx, by - 2), (bx, by + 2))
+        else:
+            pygame.draw.circle(surf, palette.BLACK, (bx, by), r + 1)
+            pygame.draw.circle(surf, palette.WHITE, (bx, by), r)
+            pygame.draw.lines(surf, palette.RED, False, [(bx - 2, by), (bx - 1, by + 1), (bx + 2, by - 2)])
+            age = t - FOLLOW_TAP
+            if age < 16:                                   # étincelles
+                for k in range(8):
+                    a = k * math.pi / 4
+                    d = 6 + age // 2
+                    surf.set_at((int(bx + math.cos(a) * d), int(by + math.sin(a) * d)),
+                                palette.YELLOW_LIGHT if k % 2 else palette.WHITE)
+        # texte
+        color = palette.WHITE if not tapped or (t // 6) % 2 else palette.GREEN_LIGHT
+        font.draw(surf, "FOLLOW", x0 + 32, y0 + 5, palette.RED_LIGHT if not tapped else color, 1)
+        font.draw(surf, "FOR MORE!" if not tapped else "THANKS!", x0 + 32, y0 + 16, palette.WHITE, 1)
+        # main-curseur : arrive par la droite, appuie, repart
+        hand = art.hand()
+        tx, ty = bx - 3, by - 1                            # bout du doigt sur le badge
+        if t < FOLLOW_TAP - 4:
+            k = max(0.0, min(1.0, (t - 30) / (FOLLOW_TAP - 34)))
+            k = 1 - (1 - k) ** 3                           # arrivée en douceur
+            hx = int(x0 + w + 4 + (tx - (x0 + w + 4)) * k)
+            hy = int(y0 + h + 8 + (ty - (y0 + h + 8)) * k)
+        elif pressed:
+            hx, hy = tx, ty + 1                            # appui
+        else:
+            k = min(1.0, (t - FOLLOW_TAP - 4) / 30)
+            hx, hy = int(tx + 30 * k), int(ty + 12 * k)
+        if t >= 30 and t < FOLLOW_TAP + 34:
+            surf.blit(hand, (hx, hy))
+        surf.set_clip(clip)
 
     def _teaser_look(self, surf, t, title=True):
         """Image d'ouverture : l'arène telle qu'elle sera à la fin, scores cachés, « WHO WINS? ».

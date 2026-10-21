@@ -152,3 +152,29 @@ def test_render_every_phase_without_error():
         b.step()
         if b.frame % 5 == 0 or b.phase in ("teaser", "outro"):
             r.draw(surf)
+
+
+def test_follow_prompt_tap_sound_subtitle_and_free_band():
+    from game.battle import FOLLOW_BOX_H, FOLLOW_TAP
+    b = Battle(30, Settings(players=4))
+    while b.frame < b.battle_start:
+        b.step()
+    taps = [e.frame for e in b.events if e.name == "follow_tap"]
+    assert taps == [b.intro_start + FOLLOW_TAP]
+    assert any(t == "FOLLOW FOR MORE!" for _, _, t in b.subtitles)
+    for seed in range(40):                                  # aucun cube caché par l'encadré
+        bb = Battle(seed, Settings(players=4, teaser=False, league=False))
+        assert all(c.cy - c.half - 12 >= 4 + FOLLOW_BOX_H for c in bb.cubes)
+    off = Battle(30, Settings(follow_prompt=False))
+    while off.frame < off.battle_start:
+        off.step()
+    assert not any(e.name == "follow_tap" for e in off.events)
+
+
+def test_follow_prompt_renders_every_frame():
+    b = Battle(31, Settings())
+    r = Renderer(b)
+    surf = pygame.Surface((135, 240))
+    while b.frame < b.battle_start + 2:
+        b.step()
+        r.draw(surf)

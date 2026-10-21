@@ -39,7 +39,7 @@ def random_direction(rng: random.Random) -> tuple[float, float]:
 
 
 def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obstacles=(),
-                  strict: bool = False) -> Scenario:
+                  strict: bool = False, top_reserved: float = 0) -> Scenario:
     """`strict` : un cube ne démarre JAMAIS sur ou contre un obstacle (cartes dessinées).
     Sans `strict`, placement d'origine (conservé pour rejouer à l'identique les anciennes vidéos)."""
     rng = random.Random(seed)
@@ -67,7 +67,7 @@ def make_scenario(seed: int, settings: Settings, arena_w: int, arena_h: int, obs
             tries = 0
             while True:
                 x = rng.uniform(margin, arena_w - margin)
-                y = rng.uniform(margin, arena_h - margin)
+                y = rng.uniform(max(margin, top_reserved), arena_h - margin)
                 tries += 1
                 if free(x, y) and all(math.hypot(x - c.x, y - c.y) >= dist for c in cubes):
                     break
