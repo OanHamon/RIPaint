@@ -23,7 +23,7 @@ from audio.mixer import render_track, to_int16_stereo
 from audio.sfx import build_bank
 from audio.synth import SAMPLE_RATE
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W, OUTPUT_H, OUTPUT_W
-from game import league, modes
+from game import league, modes, variants
 from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
@@ -136,7 +136,9 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     # date de création en tête du nom : les vidéos se trient naturellement par date
     stamp = datetime.now().strftime("%Y-%m-%d_%Hh%Mm%Ss")
     mode = modes.resolve(seed, settings)
-    final = out_dir / video_filename(settings, stamp, seed, mode.key if mode else "")
+    variant = variants.resolve(settings)
+    tag = " ".join(t for t in ("" if variant.key == variants.COLORS else variant.key, mode.key if mode else "") if t)
+    final = out_dir / video_filename(settings, stamp, seed, tag)
     tmp_video = final.with_name(final.stem + ".video.tmp.mp4")
     tmp_audio = final.with_name(final.stem + ".audio.tmp.wav")
     err_log = final.with_name(final.stem + ".ffmpeg.log")
@@ -148,7 +150,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
     if settings.league and battle.final is not None:
         r = battle.final["result"]
         winner = battle.cubes[r.winner].team if r.winner is not None else None
-        new_league = league.with_result(league.load(), winner)
+        new_league = league.with_result(league.load(variant=battle.variant.key), winner)
         battle.league = {"day": new_league["day"], "standings": league.standings(new_league)}
     renderer = Renderer(battle)
     surf = pygame.Surface((LOGICAL_W, LOGICAL_H))
@@ -215,7 +217,7 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
               str(final)], err_log)
 
         if new_league is not None:
-            league.save(new_league)            # seulement une fois la vidéo réussie
+            league.save(new_league, variant=battle.variant.key)   # seulement une fois la vidéo réussie
         if settings.caption_file and settings.caption_text():
             # légende exacte (avec « ? ») prête à coller dans TikTok
             final.with_suffix(".txt").write_text(settings.caption_text() + "\n", encoding="utf-8")

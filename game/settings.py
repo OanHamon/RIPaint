@@ -99,6 +99,8 @@ class Settings:
     tiktok_rewards: bool = True       # vidéo toujours > 1 min (Creator Rewards Program)
     min_video_duration: float = 62.0  # durée minimale visée quand tiktok_rewards est actif
     players: int = 0                  # 0 = aléatoire (2 à 4), sinon 2, 3 ou 4
+    variant: str = "colors"           # qui s'affronte : « colors », « countries »… (voir game/variants.py)
+    paint_pattern: bool = True        # traînée aux motifs du concurrent (drapeau…) ; False = couleur unie
     cube_size: int = 13
     arena_centered: bool = True       # arène centrée sur l'écran (False = ancienne mise en page)
     lives: int = 3                    # vies par cube (0 = illimitées)

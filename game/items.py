@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from engine8bit import palette
 
-from . import physics
+from . import physics, variants
 from .entities import Aim, Bomb, Bullet, Cube, Item, Slash, Swipe, Wave
 from .settings import ITEM_KINDS
 
@@ -112,7 +112,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     s = b.settings
     cube.items += 1
     b.emit(f"pickup_{item.kind}")
-    light = palette.TEAMS[cube.team][2]
+    light = variants.colors(cube.team)[2]
     # le texte s'affiche du côté de l'arène opposé au cube, pour ne pas cacher l'action
     anchor = "bottom" if cube.cy < b.H / 2 else "top"
     b.popup(f"{cube.team}: {ITEM_NAMES[item.kind]}!", light, anchor=anchor)
@@ -307,7 +307,7 @@ def update_swipes(b: "Battle") -> None:
                 damage(b, c)
                 b.emit("brush_hit")
                 b.emit("slow", frame=b.frame + 8)
-                b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, palette.TEAMS[owner.team][1], 8)
+                b.sparkle(b.layout.arena_x + c.cx, b.layout.arena_y + c.cy, variants.colors(owner.team)[1], 8)
         if sw.frame >= sw.duration:
             b.swipes.remove(sw)
 
@@ -482,7 +482,7 @@ def knock_out(b: "Battle", cube: Cube) -> None:
         cube.death_anim = 0
         cube.death_from = cube.size
     b.aims = [a for a in b.aims if a.shooter != cube.idx and a.target != cube.idx]
-    light = palette.TEAMS[cube.team][2]
+    light = variants.colors(cube.team)[2]
     anchor = "bottom" if cube.cy < b.H / 2 else "top"
     b.popup(f"{cube.team} K.O.!", light, anchor=anchor)
     b.emit("ko")

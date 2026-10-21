@@ -8,7 +8,7 @@ import pygame
 from engine8bit import font, palette
 from engine8bit.display import FPS, LOGICAL_H, LOGICAL_W
 
-from . import art
+from . import art, variants
 from .battle import (END_FRAMES, FOLLOW_BOX_H, FOLLOW_TAP, LOOP_FRAMES, REVEAL_FRAMES, REWIND_FRAMES, TEASER_FRAMES, Battle,
                      fmt_pct)
 from .items import HIT_ANIM, SPAWN_ANIM
@@ -37,11 +37,28 @@ class Renderer:
         yy, xx = np.mgrid[0:H, 0:W]
         checker = ((xx // 6) + (yy // 6)) % 2 == 0
         self.floor = np.where(checker[..., None], np.array(palette.FLOOR_A), np.array(palette.FLOOR_B)).astype(np.uint8)
-        self.lut = np.array([palette.TEAMS[c.team][1] for c in battle.cubes], dtype=np.uint8)
+        self.paint = np.stack([self._paint_texture(c.team, W, H) for c in battle.cubes])
         self.arena = pygame.Surface((W, H))
         self.background = self._make_background()
         self.obstacle_layer = self._make_obstacles()
         self.shade = _dither(palette.BLACK)
+
+    def _paint_texture(self, team: str, W: int, H: int) -> np.ndarray:
+        """Couleur de chaque case peinte par ce concurrent : son motif de traînée répété sur
+        toute l'arène (aligné sur l'arène, pas sur le cube), ou sa couleur principale."""
+        c = variants.BY_NAME[team]
+        if not (c.trail and self.b.settings.paint_pattern):
+            return np.broadcast_to(np.array(c.colors[1], dtype=np.uint8), (H, W, 3))
+        tw = max(len(row) for row in c.trail)
+        tile = np.array([[variants.PIXELS[row[x % len(row)]] for x in range(tw)] for row in c.trail],
+                        dtype=np.float32)
+        # motif adouci vers la couleur principale : les zones restent lisibles même si
+        # plusieurs drapeaux contiennent du blanc
+        tile = tile * (1 - variants.TRAIL_TINT) + np.array(c.colors[1], dtype=np.float32) * variants.TRAIL_TINT
+        k = variants.TRAIL_SCALE
+        tile = np.repeat(np.repeat(tile.round().astype(np.uint8), k, 0), k, 1)
+        reps = (-(-H // tile.shape[0]), -(-W // tile.shape[1]), 1)
+        return np.tile(tile, reps)[:H, :W]
 
     # ---- Fond ----------------------------------------------------------------------------
 
@@ -156,8 +173,8 @@ class Renderer:
     def _arena(self, surf, grid=None):
         g = self.b.grid if grid is None else grid
         rgb = self.floor.copy()
-        painted = g >= 0
-        rgb[painted] = self.lut[g[painted]]
+        ys, xs = np.nonzero(g >= 0)
+        rgb[ys, xs] = self.paint[g[ys, xs], ys, xs]
         pygame.surfarray.blit_array(self.arena, rgb.transpose(1, 0, 2))
         surf.blit(self.arena, (self.L.arena_x, self.L.arena_y))
 
@@ -242,7 +259,7 @@ class Renderer:
             p = min(1.0, sw.frame / sw.duration)
             a_cur = -math.pi / 2 + math.pi * p
             a_tail = max(-math.pi / 2, a_cur - math.radians(80))
-            _, mid, light = palette.TEAMS[owner.team]
+            _, mid, light = variants.colors(owner.team)
             steps = max(6, int(radius * (a_cur - a_tail)))
             for i in range(steps + 1):
                 a = sw.theta + a_tail + (a_cur - a_tail) * i / steps
@@ -264,7 +281,7 @@ class Renderer:
             x0, y0 = L.arena_x + s.cx, L.arena_y + s.cy
             x1, y1 = L.arena_x + t.cx, L.arena_y + t.cy
             dist = max(1, int(math.hypot(x1 - x0, y1 - y0)))
-            light = palette.TEAMS[s.team][2]
+            light = variants.colors(s.team)[2]
             for i in range(int(s.half) + 1, dist):
                 if (i + b.frame) % 4 < 2:
                     x = int(x0 + (x1 - x0) * i / dist)
@@ -282,7 +299,7 @@ class Renderer:
     def _bullets(self, surf):
         b, L = self.b, self.L
         for bl in b.bullets:
-            light = palette.TEAMS[b.cubes[bl.owner].team][2]
+            light = variants.colors(b.cubes[bl.owner].team)[2]
             for i, (tx, ty) in enumerate(bl.trail[:-1]):
                 surf.set_at((int(L.arena_x + tx), int(L.arena_y + ty)), light if i % 2 else palette.WHITE)
             x, y = int(L.arena_x + bl.x), int(L.arena_y + bl.y)
@@ -306,7 +323,7 @@ class Renderer:
                 # traînée de « fantômes » derrière un cube chaussé de bottes
                 for k, gap in enumerate((c.size * 0.9, c.size * 0.45)):
                     gx, gy = int(x - c.dx * gap), int(y - c.dy * gap)
-                    color = palette.TEAMS[c.team][1] if k else palette.TEAMS[c.team][2]
+                    color = variants.colors(c.team)[1] if k else variants.colors(c.team)[2]
                     if (b.frame + k) % 2 == 0:
                         pygame.draw.rect(surf, color, (gx, gy, c.size, c.size), 1)
             blink = c.invuln > 0 and not c.dead and c.hit_anim == 0 and (b.frame // 3) % 2 == 1
@@ -341,7 +358,7 @@ class Renderer:
                 surf.blit(cr, (x + c.size // 2 - 2, top_y - 3))
             if waiting and b.nicknames[c.idx]:
                 font.draw(surf, b.nicknames[c.idx], x + c.size // 2, max(L.arena_y + 1, y - 10),
-                          palette.TEAMS[c.team][2], 1, "center")
+                          variants.colors(c.team)[2], 1, "center")
         if jumping:
             # la couronne saute de l'ancien leader au nouveau (arc de cercle)
             old, new, start = b.crown_jump
@@ -474,7 +491,7 @@ class Renderer:
                 lw = font.text_width(label) + 6
                 lx = int(x0 + slot * (c.idx + 0.5) - lw / 2)
                 art.draw_cube(surf, lx, y + 10, 5, c.team)
-                color = palette.TEAMS[c.team][2] if (b.frame // 8 + c.idx) % 2 else palette.WHITE
+                color = variants.colors(c.team)[2] if (b.frame // 8 + c.idx) % 2 else palette.WHITE
                 font.draw(surf, label, lx + 5, y + 9, color)
             return
         total = b.paintable
@@ -486,8 +503,8 @@ class Renderer:
             xa = x + round(inner * acc / total)
             xb = x + round(inner * acc_next / total)
             if xb > xa:
-                pygame.draw.rect(surf, palette.TEAMS[c.team][1], (xa, y + 1, xb - xa, 5))
-                pygame.draw.rect(surf, palette.TEAMS[c.team][2], (xa, y + 1, xb - xa, 1))
+                pygame.draw.rect(surf, variants.colors(c.team)[1], (xa, y + 1, xb - xa, 5))
+                pygame.draw.rect(surf, variants.colors(c.team)[2], (xa, y + 1, xb - xa, 1))
             acc = acc_next
         pcts = b.percentages()
         n = len(b.cubes)
@@ -498,7 +515,7 @@ class Renderer:
             cx = x0 + slot * (c.idx + 0.5)
             lx = int(cx - lw / 2)
             art.draw_cube(surf, lx, y + 10, 5, c.team)
-            font.draw(surf, label, lx + 5, y + 9, palette.TEAMS[c.team][2])
+            font.draw(surf, label, lx + 5, y + 9, variants.colors(c.team)[2])
 
     # ---- Phases --------------------------------------------------------------------------
 
@@ -621,7 +638,7 @@ class Renderer:
             lw = font.text_width("??%") + 6
             lx = int(x0 + slot * (c.idx + 0.5) - lw / 2)
             art.draw_cube(surf, lx, y + 10, 5, c.team)
-            font.draw(surf, "??%", lx + 5, y + 9, palette.TEAMS[c.team][2])
+            font.draw(surf, "??%", lx + 5, y + 9, variants.colors(c.team)[2])
         if title and (t // 8) % 2 == 0:
             cy = L.arena_y + b.H // 2 - 26
             pygame.draw.rect(surf, palette.BLACK, (L.arena_x + 3, cy - 4, b.W - 6, 58))
@@ -707,12 +724,12 @@ class Renderer:
             pygame.draw.rect(surf, palette.GREY_DARK, (bar_x, y + 2, bar_w, 5))
             w = int(bar_w * rk.pct / best * prog)
             if w > 0:
-                _, mid, light = palette.TEAMS[rk.team]
+                _, mid, light = variants.colors(rk.team)
                 pygame.draw.rect(surf, mid, (bar_x, y + 2, w, 5))
                 pygame.draw.rect(surf, light, (bar_x, y + 2, w, 1))
             if prog >= 1.0:
                 winner_flash = i == 0 and (t // 4) % 2 == 0
-                color = palette.WHITE if winner_flash else palette.TEAMS[rk.team][2]
+                color = palette.WHITE if winner_flash else variants.colors(rk.team)[2]
                 font.draw(surf, fmt_pct(rk.pct), px + pw - 2, y + 1, color, 1, "right")
             elif t >= start:
                 font.draw(surf, "?", px + pw - 4, y + 1, palette.GREY_LIGHT, 1, "right")
@@ -724,7 +741,7 @@ class Renderer:
         y += 11
         winner_team = b.cubes[b.result.winner].team if b.result.winner is not None else None
         for k, (team, wins) in enumerate(lg["standings"][:4]):
-            color = palette.TEAMS[team][2]
+            color = variants.colors(team)[2]
             if team == winner_team and (b.frame // 6) % 2 == 0:
                 color = palette.WHITE
             font.draw(surf, f"{k + 1}. {team} {wins}W", cx, y, color, 1, "center")
@@ -755,8 +772,8 @@ class Renderer:
         r = b.result
         t = age - (END_FRAMES + REVEAL_FRAMES if b.new_outro else 30)
         # panneau noir uni (déroulé vertical rapide) pour une lisibilité parfaite
-        border = palette.TEAMS[b.cubes[r.winner].team][2] if r.winner is not None else palette.WHITE
-        self._panel(surf, border, t)
+        border = variants.colors(b.cubes[r.winner].team)[2] if r.winner is not None else palette.WHITE
+        _, _, panel_w, _ = self._panel(surf, border, t)
         show_league = b.league is not None and t >= 120
         y = L.safe.top + 12
         if r.winner is not None:
@@ -769,12 +786,14 @@ class Renderer:
                 surf.blit(crown, (cx - 7, y - 9 - bounce))
             y += 36
             if t >= 8:
-                font.draw(surf, win.team, cx, y, palette.TEAMS[win.team][2], 2, "center")
+                scale = 2 if font.text_width(win.team, 2) <= panel_w - 4 else 1   # noms longs
+                font.draw(surf, win.team, cx, y + (4 if scale == 1 else 0), variants.colors(win.team)[2], scale,
+                          "center")
             y += 18
             nick = b.nicknames[win.idx]
             if nick:
                 if t >= 10:
-                    font.draw(surf, f'"{nick}"', cx, y - 2, palette.TEAMS[win.team][2], 1, "center")
+                    font.draw(surf, f'"{nick}"', cx, y - 2, variants.colors(win.team)[2], 1, "center")
                 y += 9
             if t >= 14:
                 color = palette.WHITE if (t // 12) % 2 == 0 else palette.YELLOW_LIGHT
@@ -814,7 +833,7 @@ class Renderer:
             if t >= 34 + k * 8:
                 place = r.ranking.index(rk) + 1
                 label = b.nicknames[rk.idx] or rk.team
-                font.draw(surf, f"{place}. {label} {fmt_pct(rk.pct)}", cx, y, palette.TEAMS[rk.team][2], 1, "center")
+                font.draw(surf, f"{place}. {label} {fmt_pct(rk.pct)}", cx, y, variants.colors(rk.team)[2], 1, "center")
             y += 10
 
     def _safe_zone(self, surf):

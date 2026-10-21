@@ -38,6 +38,19 @@ La règle des vidéos de plus d'1 minute passe avant tout : aucun mode ne raccou
 Le réglage « Rythme final » (APPARITION) fait la même chose en mode classique : ×0,5 = les bonus
 tombent deux fois plus souvent à la fin du chrono ; ×1 = rythme constant.
 
+**Variantes** (réglage « Variante ») : qui s'affronte dans l'arène. « couleurs » est le jeu d'origine
+(RED, BLUE, YELLOW, GREEN) ; « pays » tire 2 à 4 pays selon la seed (jamais deux pays de la même
+couleur dominante) : le cube porte le drapeau, le nom du pays s'affiche partout (« FRANCE LEADS! »,
+« FRANCE WINS! ») et les accroches deviennent « PICK YOUR COUNTRY! ». La traînée reprend le motif du
+drapeau, adouci vers la couleur principale pour que les zones restent lisibles ; l'option
+« Traînée à motifs » repasse en couleur unie. La ligue est tenue séparément pour chaque variante
+(`league.json` pour les couleurs, `league_countries.json` pour les pays). Les positions et la partie
+d'une seed ne changent pas d'une variante à l'autre : seuls les concurrents changent.
+
+Ajouter une variante (célébrités, animaux…) ou un pays : tout se passe dans `game/variants.py`.
+Un concurrent = un nom, une famille de couleur, un motif de cube et un motif de traînée dessinés
+en ASCII (une lettre = un pixel, couleurs dans `PIXELS`).
+
 - 1080x1920, 60 fps, MP4 H.264 + AAC, rendu pixel-perfect (135x240 agrandi x8 sans lissage)
 - Tout est généré par le code : graphismes, police pixel, bruitages et musique chiptune (aucun droit d'auteur tiers)
 - Chaque vidéo correspond à une **seed** inscrite dans son nom : la même seed avec les mêmes réglages redonne exactement la même partie

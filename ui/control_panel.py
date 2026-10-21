@@ -13,7 +13,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from game import league, modes
+from game import league, modes, variants
 from game import settings as cfg
 from game.maps import MAP_NAMES
 from game.settings import ITEM_KINDS, ITEM_LABELS
@@ -69,6 +69,16 @@ class ControlPanel:
         mode_combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
         self.mode_info = ttk.Label(box, foreground="#666", wraplength=330)
         self.mode_info.grid(row=10, column=0, columnspan=2, sticky="w")
+        ttk.Label(box, text="Variante").grid(row=11, column=0, sticky="w")
+        variant_labels = dict(variants.CHOICES)
+        self.variant = tk.StringVar(value=variant_labels.get(self.s.variant, variant_labels[variants.COLORS]))
+        variant_combo = ttk.Combobox(box, textvariable=self.variant, values=list(variant_labels.values()),
+                                     state="readonly", width=18)
+        variant_combo.grid(row=11, column=1, sticky="w", padx=6, pady=2)
+        variant_combo.bind("<<ComboboxSelected>>", lambda _e: self.on_change())
+        self.paint_pattern = tk.BooleanVar(value=self.s.paint_pattern)
+        ttk.Checkbutton(box, text="Traînée aux motifs du concurrent (drapeau…)", variable=self.paint_pattern,
+                        command=self.on_change).grid(row=12, column=0, columnspan=2, sticky="w")
         self.cube_size = tk.IntVar(value=self.s.cube_size)
         self._spin(box, 1, "Taille des cubes (pixels)", self.cube_size, 5, 16, 1)
         self.speed_ramp = tk.DoubleVar(value=self.s.speed_ramp)
@@ -233,6 +243,8 @@ class ControlPanel:
         label = self.players.get()
         s.players = next((n for n, text in PLAYER_CHOICES.items() if text == label), 0)
         s.mode = next((k for k, text in modes.CHOICES if text == self.mode.get()), modes.CLASSIC)
+        s.variant = next((k for k, text in variants.CHOICES if text == self.variant.get()), variants.COLORS)
+        s.paint_pattern = self.paint_pattern.get()
         s.cube_size = min(16, max(5, int(self._get(self.cube_size, s.cube_size))))
         f = {k: bool(v.get()) for k, v in self.flags.items()}
         s.tiktok_rewards = f["tiktok_rewards"]
@@ -268,6 +280,8 @@ class ControlPanel:
 
     def on_change(self, save: bool = True):
         s = self.collect()
+        if hasattr(self, "league_label"):
+            self._refresh_league()          # une ligue par variante
         mode = modes.BY_KEY.get(s.mode)
         shown = modes.apply(s, mode)
         pcts = shown.item_percentages()
@@ -381,7 +395,7 @@ class ControlPanel:
             self.status.config(text=f"Terminé : {n} vidéo(s) dans le dossier « {self.s.output_dir} ».")
 
     def _refresh_league(self):
-        data = league.load()
+        data = league.load(variant=self.s.variant)
         if data["day"] == 0:
             self.league_label.config(text="Ligue : aucune journée jouée")
         else:
@@ -390,7 +404,7 @@ class ControlPanel:
 
     def reset_league(self):
         if messagebox.askyesno("Ligue", "Remettre le classement de la ligue à zéro (jour 0) ?"):
-            league.reset()
+            league.reset(variant=self.s.variant)
             self._refresh_league()
 
     def cancel(self):

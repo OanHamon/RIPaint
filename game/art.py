@@ -1,9 +1,14 @@
 """Sprites 8-bit des objets et effets, dessinés en ASCII."""
 
+from functools import lru_cache
+
+import numpy as np
 import pygame
 
 from engine8bit import palette
 from engine8bit.sprites import sprite
+
+from . import variants
 
 K = palette.BLACK
 COLORS = {
@@ -231,21 +236,39 @@ def magnet_icon() -> pygame.Surface:
     return sprite(MINI_MAGNET, COLORS)
 
 
+@lru_cache(maxsize=256)
+def skin_body(team: str, inner: int, shade: int) -> pygame.Surface:
+    """Motif du concurrent (drapeau…) agrandi sans lissage sur le corps du cube, avec
+    l'ombre en bas à droite assombrie comme sur un cube uni."""
+    img = pygame.transform.scale(sprite(variants.BY_NAME[team].skin, variants.PIXELS), (inner, inner))
+    arr = pygame.surfarray.pixels3d(img)
+    edge = np.zeros((inner, inner), dtype=bool)          # surfarray : indices (x, y)
+    edge[inner - shade:, :] = True
+    edge[:, inner - shade:] = True
+    arr[edge] = arr[edge].astype(np.uint16) * 3 // 5
+    del arr
+    return img
+
+
 def draw_cube(surf: pygame.Surface, x: int, y: int, size: int, team: str, look=(0.0, 0.0),
               stunned: bool = False, flash: bool = False, frozen: bool = False,
               hurt: bool = False, dead: bool = False) -> None:
     """Cube 8-bit : contour noir, corps clair, ombre foncée, reflet, yeux qui regardent
     dans la direction du mouvement (croix si assommé)."""
-    dark, mid, light = palette.TEAMS[team]
+    dark, mid, light = variants.colors(team)
     if dead:                                        # K.O. : cube grisé
         dark, mid, light = palette.GREY_DARK, palette.GREY, palette.GREY_LIGHT
     body = palette.WHITE if flash else (mid if dead else light)
     pygame.draw.rect(surf, K, (x, y, size, size))
     if size <= 2:
         return
-    pygame.draw.rect(surf, dark, (x + 1, y + 1, size - 2, size - 2))
     shade = max(1, size // 7)
-    pygame.draw.rect(surf, body, (x + 1, y + 1, size - 2 - shade, size - 2 - shade))
+    competitor = variants.BY_NAME.get(team)
+    if competitor and competitor.skin and not dead and not flash:
+        surf.blit(skin_body(team, size - 2, shade), (x + 1, y + 1))
+    else:
+        pygame.draw.rect(surf, dark, (x + 1, y + 1, size - 2, size - 2))
+        pygame.draw.rect(surf, body, (x + 1, y + 1, size - 2 - shade, size - 2 - shade))
     surf.set_at((x + 1, y + 1), palette.WHITE)
     if size >= 10:
         pygame.draw.rect(surf, palette.WHITE, (x + 1, y + 1, 2, 1))

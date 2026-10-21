@@ -23,7 +23,7 @@ from textual.theme import Theme
 from textual.widget import Widget
 from textual.widgets import Footer, Input, Label, RichLog, Static
 
-from game import modes
+from game import modes, variants
 from game.battle import video_seconds
 from game import settings as cfg
 from game.settings import ITEM_KINDS, ITEM_LABELS
@@ -43,7 +43,7 @@ TEAM_WORDS = {name: colors[1] for name, colors in theme.TEAMS.items()}
 
 # Réglages modifiables depuis l'interface ; les autres clés de config.json sont préservées.
 MANAGED = [f"prob_{k}" for k in ITEM_KINDS] + [
-    "mode", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
+    "mode", "variant", "paint_pattern", "players", "cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items", "max_hourglasses", "master_volume", "music_volume",
     "music_enabled", "video_count", "seed", "export_srt"]
 # Compteurs qu'un mode peut imposer : ils affichent alors la valeur du mode
 LOCKABLE = ["cube_size", "lives", "obstacles", "speed_ramp", "item_interval", "item_ramp", "max_items",
@@ -410,6 +410,8 @@ class MainScreen(Screen):
                 with Vertical(classes="panel", id="p-game"):
                     yield Choice("Mode", modes.CHOICES, s.mode, id="mode")
                     yield Static(id="mode-info")
+                    yield Choice("Variante", variants.CHOICES, s.variant, id="variant")
+                    yield Toggle("Traînée à motifs", s.paint_pattern, id="paint_pattern")
                     yield Choice("Joueurs", PLAYER_CHOICES, s.players if s.players in (2, 3, 4) else 0,
                                  id="players")
                     yield Stepper("Taille des cubes", s.cube_size, 5, 16, 1, "{:g} px", id="cube_size")
@@ -476,6 +478,8 @@ class MainScreen(Screen):
     def collect(self) -> cfg.Settings:
         s = self.s
         s.mode = self.query_one("#mode", Choice).value
+        s.variant = self.query_one("#variant", Choice).value
+        s.paint_pattern = self.query_one("#paint_pattern", Toggle).value
         s.players = self.query_one("#players", Choice).value
         s.cube_size = int(self.query_one("#cube_size", Stepper).value)
         s.lives = int(self.query_one("#lives", Stepper).value)
@@ -501,6 +505,8 @@ class MainScreen(Screen):
         self._loading = True
         try:
             self.query_one("#mode", Choice).set_value(s.mode, notify=False)
+            self.query_one("#variant", Choice).set_value(s.variant, notify=False)
+            self.query_one("#paint_pattern", Toggle).set_value(s.paint_pattern, notify=False)
             self.query_one("#players", Choice).set_value(s.players if s.players in (2, 3, 4) else 0, notify=False)
             for name in ("cube_size", "lives", "obstacles", "speed_ramp"):
                 self.query_one(f"#{name}", Stepper).set_value(getattr(s, name), notify=False)

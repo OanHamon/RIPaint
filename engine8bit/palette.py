@@ -32,6 +32,7 @@ PURPLE = (104, 68, 252)
 BROWN = (136, 72, 0)
 SKY = (164, 228, 252)
 ORANGE = (248, 152, 56)
+ORANGE_LIGHT = (252, 196, 140)
 
 # Couleurs des équipes : (foncé, peinture, clair)
 TEAMS = {

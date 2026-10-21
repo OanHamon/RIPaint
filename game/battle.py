@@ -16,7 +16,7 @@ from engine8bit import palette
 from engine8bit.display import FPS
 
 from . import items as item_logic
-from . import modes, physics
+from . import modes, physics, variants
 from .entities import Cube, Particle, Popup
 from .layout import make_layout
 from . import maps
@@ -95,9 +95,12 @@ class Battle:
                                       strict=strict, top_reserved=reserved)
         self.rng = self.scenario.rng
         self.fx = random.Random(seed * 31 + 7)        # aléatoire purement visuel
-        self.hook = self.scenario.hook
+        # la variante remplace les couleurs tirées par le scénario (positions et seed inchangées)
+        self.variant = variants.resolve(settings)
+        self.competitors = self.variant.pick(seed, [c.team for c in self.scenario.cubes])
+        self.hook = self.variant.adapt(self.scenario.hook)
         self.grid = np.full((self.H, self.W), -1, dtype=np.int8)
-        self.cubes = [Cube(i, c.team, c.x, c.y, c.dx, c.dy, settings.cube_size)
+        self.cubes = [Cube(i, self.competitors[i].name, c.x, c.y, c.dx, c.dy, settings.cube_size)
                       for i, c in enumerate(self.scenario.cubes)]
         # en duel (2 cubes), un K.O. laisse un seul cube repeindre toute l'arène : plus de vies
         self.start_lives = max(0, settings.lives)
@@ -141,7 +144,7 @@ class Battle:
         self.lead_changes = 0
         self.league: dict | None = None         # classement de la ligue (fourni par l'export)
         names = random.Random(seed * 13 + 5).sample(NICKNAMES, len(self.cubes))
-        self.nicknames = names if settings.nicknames else [""] * len(self.cubes)
+        self.nicknames = names if (settings.nicknames and self.variant.nicknames) else [""] * len(self.cubes)
 
         self.frame = -1
         self.intro_start = (TEASER_FRAMES + REWIND_FRAMES) if settings.teaser else 0
@@ -271,8 +274,8 @@ class Battle:
             a = self.rng.uniform(0, 2 * math.pi)
             d = self.rng.uniform(r, r + 5)
             physics.paint_disc(self.grid, x + math.cos(a) * d, y + math.sin(a) * d, self.rng.choice([1, 1.5, 2]), idx)
-        color = palette.TEAMS[self.cubes[idx].team][1]
-        light = palette.TEAMS[self.cubes[idx].team][2]
+        color = variants.colors(self.cubes[idx].team)[1]
+        light = variants.colors(self.cubes[idx].team)[2]
         for k in range(16):
             a = self.fx.uniform(0, 2 * math.pi)
             sp = self.fx.uniform(20, 70)
@@ -428,7 +431,7 @@ class Battle:
         self.lead_changes += 1
         if self.settings.lead_announce:
             c = self.cubes[leader]
-            self.popup(f"{c.team} LEADS!", palette.TEAMS[c.team][2], duration=72)
+            self.popup(f"{c.team} LEADS!", variants.colors(c.team)[2], duration=72)
             self.emit("lead_change")
 
     def _paint_under(self, c: Cube) -> None:
@@ -487,7 +490,7 @@ class Battle:
         start = END_FRAMES + REVEAL_FRAMES if self.new_outro else 30
         end = self.total_frames - (LOOP_FRAMES if self.new_outro else 0)
         if start <= f - self.battle_end and f < end and f % 2 == 0:
-            colors = ([palette.TEAMS[self.cubes[r.winner].team][1], palette.TEAMS[self.cubes[r.winner].team][2],
+            colors = ([variants.colors(self.cubes[r.winner].team)[1], variants.colors(self.cubes[r.winner].team)[2],
                        palette.WHITE] if r.winner is not None else [palette.GREY_LIGHT, palette.WHITE])
             x = self.fx.uniform(self.layout.safe_x0, self.layout.safe_x1)
             life = self.fx.randint(80, 140)
