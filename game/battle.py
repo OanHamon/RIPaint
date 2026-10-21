@@ -74,9 +74,13 @@ class Battle:
         self.grid = np.full((self.H, self.W), -1, dtype=np.int8)
         self.cubes = [Cube(i, c.team, c.x, c.y, c.dx, c.dy, settings.cube_size)
                       for i, c in enumerate(self.scenario.cubes)]
+        # en duel (2 cubes), un K.O. laisse un seul cube repeindre toute l'arène : plus de vies
+        self.start_lives = max(0, settings.lives)
+        if len(self.cubes) == 2 and settings.lives > 0 and settings.duel_lives > 0:
+            self.start_lives = settings.duel_lives
         for c in self.cubes:
             c.last_pos = (c.cx, c.cy)
-            c.lives = max(0, settings.lives)
+            c.lives = self.start_lives
         for x0, y0, x1, y1 in self.obstacles:
             self.grid[y0:y1, x0:x1] = physics.OBSTACLE
         self.paintable = int((self.grid != physics.OBSTACLE).sum())   # cases qui comptent pour le score

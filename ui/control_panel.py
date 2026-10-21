@@ -80,6 +80,8 @@ class ControlPanel:
             row=7, column=0, columnspan=2, sticky="w")
         self.lives = tk.IntVar(value=self.s.lives)
         self._spin(box, 5, "Vies par cube (0 = illimitées)", self.lives, 0, 5, 1)
+        self.duel_lives = tk.IntVar(value=self.s.duel_lives)
+        self._spin(box, 8, "Vies en duel (2 cubes)", self.duel_lives, 1, 6, 1)
 
         # --- Objets ---
         box = ttk.LabelFrame(main, text="Probabilité des objets", padding=8)
@@ -184,7 +186,7 @@ class ControlPanel:
         ttk.Button(bar2, text="Réglages avancés…", command=self.open_config).pack(side="left", padx=6)
 
         for var in (self.interval, self.max_items, self.max_hourglasses, self.count, self.cube_size,
-                    self.speed_ramp, self.obstacles, self.lives):
+                    self.speed_ramp, self.obstacles, self.lives, self.duel_lives):
             var.trace_add("write", lambda *_: self.on_change())
         self.on_change(save=False)
 
@@ -224,6 +226,7 @@ class ControlPanel:
         s.slowmo = f["slowmo"]
         s.nicknames = f["nicknames"]
         s.league = f["league"]
+        s.duel_lives = min(6, max(1, int(self._get(self.duel_lives, s.duel_lives))))
         s.lives = min(5, max(0, int(self._get(self.lives, s.lives))))
         s.obstacles = min(4, max(0, int(self._get(self.obstacles, s.obstacles))))
         label = self.map.get()

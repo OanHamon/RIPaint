@@ -353,7 +353,7 @@ class Renderer:
 
     def _lives(self, surf, c, x, y):
         """Petits points de vie sous le cube (au-dessus s'il touche le bas de l'arène)."""
-        total = max(self.b.settings.lives, c.lives)
+        total = max(self.b.start_lives, c.lives)
         if self.b.settings.lives <= 0 or c.dead:
             return
         L = self.L

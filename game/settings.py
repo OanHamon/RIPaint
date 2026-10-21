@@ -95,6 +95,7 @@ class Settings:
     cube_size: int = 13
     arena_centered: bool = True       # arène centrée sur l'écran (False = ancienne mise en page)
     lives: int = 3                    # vies par cube (0 = illimitées)
+    duel_lives: int = 4               # vies quand il n'y a que 2 cubes (0 = comme `lives`)
     max_bonus_lives: int = 2          # vies gagnées avec les cœurs au-delà du départ
     death_shrink: bool = True         # un cube K.O. se grise et rapetisse
     map: str = "random"               # « random », un nom de carte, ou « generated » (obstacles au hasard)

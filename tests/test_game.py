@@ -522,7 +522,7 @@ def test_obstacles_option_saved_from_settings():
 # ---- Vies et K.O. ----------------------------------------------------------------------
 
 def _two_cubes(lives=3, seed=120):
-    b = Battle(seed, only("gun", item_interval=999, lives=lives, obstacles=0, players=2))
+    b = Battle(seed, only("gun", item_interval=999, lives=lives, duel_lives=lives, obstacles=0, players=2))
     while b.frame < b.battle_start + 5:
         b.step()
     return b, b.cubes[0], b.cubes[1]
@@ -669,3 +669,13 @@ def test_dead_big_cube_shrinks_from_potion_size():
     for _ in range(60):
         b.step()
     assert v.dead and not v.big and v.size == round(2 * v.base_size * items.DEATH_SCALE)
+
+
+
+def test_duel_gets_more_lives():
+    duel = Battle(150, Settings(players=2))
+    assert duel.start_lives == 4 and all(c.lives == 4 for c in duel.cubes)
+    trio = Battle(150, Settings(players=3))
+    assert trio.start_lives == 3 and all(c.lives == 3 for c in trio.cubes)
+    assert Battle(150, Settings(players=2, duel_lives=5)).start_lives == 5
+    assert Battle(150, Settings(players=2, lives=0)).start_lives == 0       # vies désactivées

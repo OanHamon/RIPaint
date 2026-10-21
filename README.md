@@ -145,6 +145,7 @@ zéro depuis le panneau. L'aperçu ne compte pas.
 | `cube_size` | 13 | Taille des cubes en pixels logiques (x2 avec la potion) |
 | `lives` | 3 | Vies par cube (0 = illimitées) |
 | `max_bonus_lives` | 2 | Vies gagnées avec les cœurs au-delà du départ |
+| `duel_lives` | 4 | Vies quand il n'y a que 2 cubes (un K.O. en duel laisse un seul cube repeindre l'arène) |
 | `death_shrink` | true | Un cube K.O. se grise et rapetisse |
 | `arena_centered` | true | Arène centrée sur l'écran (false = ancienne mise en page, décalée à gauche) |
 | `map` | random | `random`, un nom de carte (ex. `CROSS`) ou `generated` (obstacles au hasard) |

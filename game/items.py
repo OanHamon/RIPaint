@@ -173,7 +173,7 @@ def pickup(b: "Battle", cube: Cube, item: Item) -> None:
     elif item.kind == "boots":
         cube.boots = round(s.boots_duration * 60)
     elif item.kind == "heart":
-        if s.lives > 0 and cube.lives < s.lives + s.max_bonus_lives:
+        if s.lives > 0 and cube.lives < b.start_lives + s.max_bonus_lives:
             cube.lives += 1
             cube.life_gained = 50
         b.sparkle(b.layout.arena_x + cube.cx, b.layout.arena_y + cube.cy - cube.half, palette.RED_LIGHT, 10)
