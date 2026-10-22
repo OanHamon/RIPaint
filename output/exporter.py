@@ -11,7 +11,7 @@ import random
 import subprocess
 import wave
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
@@ -28,6 +28,7 @@ from game.battle import Battle
 from game.render import Renderer
 from game.settings import ROOT, Settings
 
+from . import planning
 from .srt import write_srt
 
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
@@ -51,6 +52,7 @@ class ExportResult:
     caption: str = ""               # légende TikTok de la vidéo (aussi dans le .txt)
     caption_id: str = ""            # accroche utilisée (garde-fou anti-répétition)
     details: str = ""               # format · mode · thème · variante · musique (journal)
+    meta: dict = field(default_factory=dict)   # contenu de la vidéo (catalogue, planning)
 
 
 def ffmpeg_exe() -> str:
@@ -219,8 +221,12 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
         tags = [t for t in (battle.fmt.key if battle.fmt.key != "classic" else "",
                             "" if variant.key == variants.COLORS else variant.key, mode.key if mode else "",
                             battle.theme.key if battle.theme.key != "classic" else "") if t]
-        final = out_dir / video_filename(settings, stamp, seed, " ".join(tags),
-                                         caption if settings.caption_auto else None)
+        if settings.tiktok_filename and caption:
+            # nom du fichier = description TikTok (TikTok Studio la reprend telle quelle à l'import)
+            final = out_dir / (planning.unique_stem(out_dir, planning.tiktok_filename(caption)) + ".mp4")
+        else:
+            final = out_dir / video_filename(settings, stamp, seed, " ".join(tags),
+                                             caption if settings.caption_auto else None)
 
         summary = battle.result_text
         meta = {"seed": seed, "generator": "cube_battle", "result": summary,
@@ -250,8 +256,14 @@ def export_video(seed: int, settings: Settings, out_dir: Path | None = None, pro
             progress(total, total)
         details = " · ".join(x for x in (battle.fmt.name, mode.name if mode else "", battle.theme.name,
                                           variant.label, battle.music_style) if x)
+        info = {"format": battle.fmt.key, "format_name": battle.fmt.label,
+                "mode": mode.key if mode else "", "mode_name": mode.label if mode else "",
+                "theme": battle.theme.key, "theme_name": battle.theme.label,
+                "variant": variant.key, "variant_name": variant.label, "map": battle.map_name.title(),
+                "music": battle.music_style, "length": (plan or {}).get("length", ""),
+                "league_day": new_league["day"] if new_league is not None else "", "cup": (plan or {}).get("cup", "")}
         return ExportResult(final, seed, total, total / FPS, len(battle.cubes), battle.hourglasses_taken,
-                            summary, srt_path, mode.name if mode else "", caption, caption_id, details)
+                            summary, srt_path, mode.name if mode else "", caption, caption_id, details, info)
     finally:
         for p in (tmp_video, tmp_audio, err_log, *temp_files):
             try:

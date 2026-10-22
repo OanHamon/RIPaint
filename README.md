@@ -250,6 +250,27 @@ Chaque vidéo générée compte comme une journée de ligue : le gagnant marque 
 classement s'affiche à la fin (« LEAGUE DAY 12 »). Il est stocké dans `league.json` et se remet à
 zéro depuis le panneau. L'aperçu ne compte pas.
 
+## Préparer la semaine (publication TikTok)
+
+Page **📅 Semaine** du panneau, ou en ligne de commande :
+
+```bash
+python main.py --week --start 2026-10-26 --days 7 --times "12:30,19:00"
+```
+
+- Une vidéo par créneau (jours × heures), rangées dans `videos/Semaine du AAAA-MM-JJ/`.
+- **Nom du fichier = description TikTok** : TikTok Studio reprend le nom du fichier à l'import, la
+  description est donc déjà remplie (accroche, emojis, #hashtags), sans date ni seed. Les caractères
+  interdits par Windows sont remplacés par des sosies (« ？ », « ： »). Option « Nom du fichier =
+  description TikTok » (page Son & export) pour revenir à l'ancien nommage.
+- `planning.html` (s'ouvre dans le navigateur) : couverture, jour, heure, bouton « Copier la légende »,
+  case « programmée » ; `planning.csv` pour un tableur.
+- TikTok Studio (sur ordinateur) programme jusqu'à 10 jours à l'avance.
+
+**Catalogue** : `videos/catalogue.csv` liste toutes les vidéos générées (date de publication prévue,
+fichier, légende, format, mode, thème, concurrents, carte, cubes, musique, durée, résultat, seed).
+La seed reste aussi dans les métadonnées du MP4 pour rejouer une partie.
+
 ## Réglages avancés (`config.json`)
 
 | Clé | Défaut | Rôle |

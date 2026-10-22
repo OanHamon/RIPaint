@@ -23,6 +23,7 @@ from game import cup as paintcup
 from game import formats, league, modes, themes, variants, variety
 from game import settings as cfg
 from game.maps import MAP_NAMES
+from output import planning
 from game.settings import ITEM_KINDS, ITEM_LABELS
 
 ROOT = cfg.ROOT
@@ -54,7 +55,7 @@ FONT_TITLE = ("Segoe UI Semibold", 13)
 FONT_LOGO = ("Segoe UI Black", 22)
 
 PAGES = [("video", "🎬  Vidéo"), ("variety", "🎲  Variété"), ("cup", "🏆  PaintCup"),
-         ("items", "🧰  Objets"), ("sound", "🔊  Son & export")]
+         ("week", "📅  Semaine"), ("items", "🧰  Objets"), ("sound", "🔊  Son & export")]
 
 
 SCALE = 1.0          # facteur d'affichage Windows (125 %, 150 %…), fixé par run_panel
@@ -247,7 +248,7 @@ class ControlPanel:
 
         self.pages = {}
         builders = {"video": self._page_video, "variety": self._page_variety, "cup": self._page_cup,
-                    "items": self._page_items, "sound": self._page_sound}
+                    "week": self._page_week, "items": self._page_items, "sound": self._page_sound}
         for key, _ in PAGES:
             frame = ScrollPage(self.content)
             builders[key](frame.inner)
@@ -488,6 +489,48 @@ class ControlPanel:
         self.cup_matches = ttk.Frame(card, style="Card.TFrame")
         self.cup_matches.grid(row=1, column=0, columnspan=3, sticky="nsew")
 
+    def _page_week(self, page):
+        s = self.s
+        self._header(page, "Semaine", "Prépare d'un coup toutes les vidéos de la semaine, une par créneau de "
+                                      "publication, avec une fiche de planning pour TikTok Studio.")
+        card = self._card(page, "Créneaux")
+        self.week_start = tk.StringVar(value=s.week_start)
+        ttk.Label(card, text="Premier jour").grid(row=1, column=0, sticky="w", padx=(0, 14))
+        ttk.Entry(card, textvariable=self.week_start, width=14).grid(row=1, column=1, sticky="w", pady=4)
+        ttk.Label(card, text="AAAA-MM-JJ ou JJ/MM ; vide = demain", style="Muted.TLabel").grid(
+            row=1, column=2, sticky="w", padx=14)
+        self.week_days = tk.IntVar(value=s.week_days)
+        self._row_spin(card, 2, "Nombre de jours", self.week_days, 1, 10, 1,
+                       "TikTok Studio programme jusqu'à 10 jours à l'avance")
+        self.week_times = tk.StringVar(value=", ".join(s.week_times))
+        ttk.Label(card, text="Heures de publication").grid(row=3, column=0, sticky="w", padx=(0, 14))
+        ttk.Entry(card, textvariable=self.week_times, width=24).grid(row=3, column=1, sticky="w", pady=4)
+        ttk.Label(card, text="une vidéo par heure et par jour, ex. 12:30, 19:00", style="Muted.TLabel").grid(
+            row=3, column=2, sticky="w", padx=14)
+        for var in (self.week_start, self.week_times):
+            var.trace_add("write", lambda *_: self.on_change())
+        self.week_summary = ttk.Label(card, text="", foreground=ACCENT, font=FONT_BOLD)
+        self.week_summary.grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 4))
+        bar = ttk.Frame(card, style="Card.TFrame")
+        bar.grid(row=5, column=0, columnspan=3, sticky="w", pady=(6, 0))
+        self.btn_week = FlatButton(bar, "📅  PRÉPARER LA SEMAINE", self.generate_week, bg=ACCENT, fg=BG,
+                                   hover=ACCENT_HI, font=("Segoe UI Black", 10), padx=16, pady=8)
+        self.btn_week.pack(side="left")
+        FlatButton(bar, "Ouvrir le dernier planning", self.open_last_planning, font=FONT_SMALL, padx=10,
+                   pady=6).pack(side="left", padx=8)
+        FlatButton(bar, "Catalogue des vidéos", self.open_catalogue, font=FONT_SMALL, padx=10,
+                   pady=6).pack(side="left")
+        card = self._card(page, "Comment publier")
+        ttk.Label(card, text=(
+            "1. Clique « Préparer la semaine » : les vidéos arrivent dans videos/Semaine du …, et le planning "
+            "s'ouvre dans ton navigateur.\n"
+            "2. Sur ordinateur, dans TikTok Studio, importe chaque vidéo : la description est déjà remplie "
+            "(c'est le nom du fichier : accroche, emojis et #hashtags).\n"
+            "3. Choisis « Programmer » et le jour / l'heure du planning, puis coche « programmée » sur la fiche.\n"
+            "Le catalogue (videos/catalogue.csv) liste toutes les vidéos générées : format, mode, thème, "
+            "concurrents, carte, musique, durée, seed."), style="Muted.TLabel", wraplength=px(700),
+            justify="left").grid(row=1, column=0, columnspan=3, sticky="w")
+
     def _page_items(self, page):
         s = self.s
         self._header(page, "Objets", "Probabilités et rythme des objets (un mode ou un format peut les imposer).")
@@ -550,6 +593,9 @@ class ControlPanel:
         self.seed.trace_add("write", lambda *_: self.on_change())
         self.srt = tk.BooleanVar(value=s.export_srt)
         self._check(card, 2, "Sous-titres .srt", self.srt)
+        self.tiktok_filename = tk.BooleanVar(value=s.tiktok_filename)
+        self._check(card, 7, "Nom du fichier = description TikTok", self.tiktok_filename,
+                    "TikTok Studio reprend le nom à l'import : accroche, emojis et #hashtags, sans date ni seed")
         self.caption = tk.StringVar(value=s.caption)
         self.hashtags = tk.StringVar(value=" ".join("#" + h.lstrip("#") for h in s.hashtags))
         ttk.Label(card, text="Légende fixe").grid(row=3, column=0, sticky="w")
@@ -629,6 +675,10 @@ class ControlPanel:
         s.video_count = max(1, int(self._get(self.count, 1)))
         s.seed = self.seed.get().strip()
         s.export_srt = bool(self.srt.get())
+        s.tiktok_filename = bool(self.tiktok_filename.get())
+        s.week_start = self.week_start.get().strip()
+        s.week_days = min(10, max(1, int(self._get(self.week_days, s.week_days))))
+        s.week_times = [f"{h:02d}:{m:02d}" for h, m in planning.parse_times(self.week_times.get())]
         s.caption = self.caption.get().strip()
         s.hashtags = [h.lstrip("#") for h in self.hashtags.get().replace(",", " ").split() if h.lstrip("#")]
         return s
@@ -669,6 +719,11 @@ class ControlPanel:
         if s.duration_mix:
             what += f" · ≈{short} courte{'s' if short > 1 else ''}, le reste > 1 min"
         self.summary.config(text=("Prochaine génération : " + what + (" · garde-fou actif" if s.variety else "")))
+        slots = planning.week_slots(planning.parse_start(s.week_start), s.week_days, s.week_times)
+        first, last = slots[0], slots[-1]
+        self.week_summary.config(text=f"{len(slots)} vidéos · du {planning.DAYS_FR[first.weekday()].lower()} "
+                                      f"{first:%d/%m} au {planning.DAYS_FR[last.weekday()].lower()} {last:%d/%m} · "
+                                      f"{', '.join(f'{h:02d}:{m:02d}' for h, m in planning.parse_times(s.week_times))}")
         self.side_info.config(text=self._side_text())
         self._refresh_league()
         if save:
@@ -678,7 +733,7 @@ class ControlPanel:
 
     def _side_text(self) -> str:
         d = self.videos_dir()
-        n = sum(1 for p in d.glob("*.mp4") if ".tmp" not in p.name) if d.is_dir() else 0
+        n = sum(1 for p in d.rglob("*.mp4") if ".tmp" not in p.name) if d.is_dir() else 0
         h = variety.load_history()
         return f"{n} vidéo{'s' if n > 1 else ''} dans le dossier\n{h['count']} générée{'s' if h['count'] > 1 else ''} au total"
 
@@ -771,6 +826,34 @@ class ControlPanel:
         subprocess.Popen(cmd, cwd=str(ROOT), creationflags=NO_WINDOW)
         self.status.config(text="Aperçu lancé (ÉCHAP pour fermer, R pour une nouvelle partie).")
 
+    def generate_week(self):
+        if self.proc is not None:
+            return
+        self.save()
+        s = self.s
+        slots = planning.week_slots(planning.parse_start(s.week_start), s.week_days, s.week_times)
+        cmd = [python_exe(), str(MAIN), "--week", "--progress", "--days", str(s.week_days),
+               "--times", ",".join(s.week_times)]
+        if s.week_start:
+            cmd += ["--start", planning.parse_start(s.week_start).isoformat()]
+        if s.seed:
+            cmd += ["--seed", s.seed]
+        self._launch(cmd, len(slots), " (semaine)")
+
+    def open_last_planning(self):
+        pages = sorted(self.videos_dir().glob("Semaine du */planning.html"))
+        if not pages:
+            self.status.config(text="Aucun planning pour l'instant : clique « Préparer la semaine ».", fg=MUTED)
+            return
+        os.startfile(str(pages[-1])) if os.name == "nt" else subprocess.Popen(["xdg-open", str(pages[-1])])
+
+    def open_catalogue(self):
+        path = self.videos_dir() / planning.CATALOGUE_NAME
+        if not path.exists():
+            self.status.config(text="Le catalogue sera créé à la première vidéo générée.", fg=MUTED)
+            return
+        os.startfile(str(path)) if os.name == "nt" else subprocess.Popen(["xdg-open", str(path)])
+
     def generate(self, all_random: bool = False):
         if self.proc is not None:
             return
@@ -781,19 +864,23 @@ class ControlPanel:
             cmd.append("--all-random")
         if s.seed:
             cmd += ["--seed", s.seed]
+        self._launch(cmd, s.video_count, " (tout aléatoire)" if all_random else "")
+
+    def _launch(self, cmd, total: int, what: str = ""):
         env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1")
         self.proc = subprocess.Popen(cmd, cwd=str(ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, encoding="utf-8", errors="replace", env=env,
                                      creationflags=NO_WINDOW)
-        self.total = s.video_count
+        self.total = total
         self.done_paths: list[str] = []
         self.errors: list[str] = []
         self.last_caption = ""
+        self.week_page = ""
         self.progress["value"] = 0
-        what = " (tout aléatoire)" if all_random else ""
         self.status.config(text=f"Vidéo 1 / {self.total}{what} : démarrage…", fg=TEXT)
         self.btn_generate.set_enabled(False)
         self.btn_random.set_enabled(False)
+        self.btn_week.set_enabled(False)
         self.btn_cancel.set_enabled(True)
         threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
         self.root.after(100, self._poll)
@@ -828,6 +915,8 @@ class ControlPanel:
                     self.last_caption = info.get("caption", "")[:90]
                 except ValueError:
                     pass
+            elif parts[0] == "WEEK":
+                self.week_page = line[len("WEEK "):].strip()
             elif parts[0] == "ERROR":
                 self.errors.append(line)
             elif line.strip() and "Traceback" in line:
@@ -843,6 +932,7 @@ class ControlPanel:
         self.proc = None
         self.btn_generate.set_enabled(True)
         self.btn_random.set_enabled(True)
+        self.btn_week.set_enabled(True)
         self.btn_cancel.set_enabled(False)
         n = len(self.done_paths)
         self.on_change(save=False)
@@ -850,6 +940,12 @@ class ControlPanel:
             self.status.config(text=f"Génération annulée ({n} vidéo(s) terminée(s)).", fg=MUTED)
         elif self.errors:
             self.status.config(text=f"{n} vidéo(s), {len(self.errors)} erreur(s) : {self.errors[0][:200]}", fg=RED)
+        elif self.week_page:
+            self.progress["value"] = 100
+            self.status.config(text=f"Semaine prête : {n} vidéo(s). Le planning s'ouvre dans ton navigateur.",
+                               fg=GREEN)
+            if os.name == "nt":
+                os.startfile(self.week_page)
         else:
             self.progress["value"] = 100
             self.status.config(text=f"Terminé : {n} vidéo(s) dans « {self.s.output_dir} ». Légende de chaque "

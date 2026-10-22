@@ -141,6 +141,11 @@ class Settings:
     caption: str = "Which cube will win the PaintRace?"
     hashtags: list = field(default_factory=lambda: list(DEFAULT_HASHTAGS))
     caption_file: bool = True
+    tiktok_filename: bool = True      # nom du fichier = description TikTok (sans date ni seed)
+    # Préparation de la semaine (TikTok Studio programme jusqu'à 10 jours à l'avance)
+    week_start: str = ""              # premier jour (vide = demain)
+    week_days: int = 7
+    week_times: list = field(default_factory=lambda: ["12:30", "19:00"])
     crf: int = 18
     x264_preset: str = "medium"
 

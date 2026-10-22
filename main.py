@@ -7,6 +7,8 @@
   python main.py --generate 1 --seed 1234
   python main.py --generate 5 --all-random   partie et apparence tirées au hasard pour chaque vidéo
   python main.py --preview [--seed 1234]
+  python main.py --week                prépare la semaine (vidéos + planning pour TikTok Studio)
+  python main.py --week --start 2026-10-26 --days 7 --times "12:30,19:00"
 """
 
 import argparse
@@ -20,11 +22,16 @@ sys.path.insert(0, str(ROOT))
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 
-def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool = False) -> int:
+def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool = False,
+              week: dict | None = None) -> int:
+    """Génère `count` vidéos. `week` : {"start", "days", "times"} -> une vidéo par créneau de
+    publication, dans « videos/Semaine du … », avec planning.html / planning.csv."""
     from game import cup as paintcup
     from game import settings as cfg
     from game import variety
-    from output.exporter import ensure_cup, export_video, output_dir, plan_for, seeds_for_batch
+    from output import planning
+    from output.exporter import (NO_WINDOW, ensure_cup, export_video, ffmpeg_exe, output_dir, plan_for,
+                                 seeds_for_batch)
 
     try:
         sys.stdout.reconfigure(errors="replace")   # emojis des légendes dans une console Windows
@@ -44,6 +51,14 @@ def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool
         for key, value in variety.ALL_RANDOM.items():
             setattr(settings, key, value)
     settings.seed = seed_text or ""   # seed uniquement si passée explicitement (--seed)
+    videos_dir = output_dir(settings)
+    slots, target_dir, week_rows = [], videos_dir, []
+    if week is not None:
+        start = planning.parse_start(week.get("start", settings.week_start))
+        slots = planning.week_slots(start, week.get("days", settings.week_days),
+                                    week.get("times", settings.week_times))
+        count = len(slots)
+        target_dir = planning.week_folder(videos_dir, start)
     seeds = seeds_for_batch(count, settings)
 
     def say(line: str) -> None:
@@ -68,7 +83,7 @@ def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool
         if not machine:
             say(f"Vidéo {i}/{len(seeds)} - seed {seed}" + (f"  [{variety.describe(plan)}]" if plan else ""))
         try:
-            res = export_video(seed, video_settings, progress=progress, plan=plan,
+            res = export_video(seed, video_settings, out_dir=target_dir, progress=progress, plan=plan,
                                recent_captions=[v.get("caption_id") for v in history["videos"]],
                                cup_state=cup_state, cup_slot=slot)
         except Exception as exc:  # on continue avec les vidéos suivantes
@@ -80,6 +95,16 @@ def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool
                                                       "duration": round(res.duration, 1)}))
         if cup_state is not None and slot is not None:
             paintcup.save(cup_state)
+        # catalogue de toutes les vidéos (format, mode, thème… et la seed pour rejouer)
+        when = slots[i - 1] if week is not None else None
+        row = planning.catalogue_row(res, when)
+        planning.append_catalogue(videos_dir, row)
+        if week is not None:
+            cover = target_dir / "_couvertures" / f"{i:02d}.jpg"
+            if planning.make_cover(res.path, cover, ffmpeg_exe(), NO_WINDOW):
+                row["_cover"] = f"_couvertures/{cover.name}"
+            week_rows.append(row)
+            planning.write_planning(target_dir, week_rows)       # à jour même si on annule en route
         if machine:
             say(f"DONE {i} {len(seeds)} {res.path}")
             say("RESULT " + json.dumps({"path": str(res.path), "seed": seed, "duration": res.duration,
@@ -89,6 +114,9 @@ def _generate(count: int, seed_text: str | None, machine: bool, all_random: bool
         else:
             say(f"  -> {res.path.name}  ({res.details}, {res.duration:.0f} s, {res.n_cubes} cubes, {res.summary})")
             say(f"     légende : {res.caption}")
+    if week is not None and week_rows:
+        page = target_dir / "planning.html"
+        say(f"WEEK {page}" if machine else f"Planning de la semaine : {page}")
     return 1 if errors else 0
 
 
@@ -135,12 +163,21 @@ def main(argv=None) -> int:
     parser.add_argument("--seed", help="seed à utiliser (sinon aléatoire)")
     parser.add_argument("--all-random", action="store_true",
                         help="partie et apparence tirées au hasard pour chaque vidéo")
+    parser.add_argument("--week", action="store_true",
+                        help="prépare la semaine : une vidéo par créneau + planning pour TikTok Studio")
+    parser.add_argument("--start", help="premier jour de la semaine (AAAA-MM-JJ, défaut : demain)")
+    parser.add_argument("--days", type=int, help="nombre de jours (TikTok Studio : 10 au maximum)")
+    parser.add_argument("--times", help="heures de publication, ex. \"12:30,19:00\"")
     parser.add_argument("--progress", action="store_true", help=argparse.SUPPRESS)  # sortie pour l'interface
     ui = parser.add_mutually_exclusive_group()
     ui.add_argument("--terminal", action="store_true", help="ouvre l'application terminal")
     ui.add_argument("--gui", action="store_true", help="ouvre le panneau de contrôle (fenêtre)")
     args = parser.parse_args(argv)
 
+    if args.week:
+        week = {k: v for k, v in (("start", args.start), ("days", args.days), ("times", args.times))
+                if v is not None}
+        return _generate(0, args.seed, args.progress, args.all_random, week=week)
     if args.generate:
         return _generate(max(1, args.generate), args.seed, args.progress, args.all_random)
     if args.preview:
